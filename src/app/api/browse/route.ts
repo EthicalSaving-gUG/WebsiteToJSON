@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     const url = searchParams.get('url');
     const readerMode = searchParams.get('readerMode') === 'true';
     const debugMode = searchParams.get('debug') === 'true';
+    const captchaMode = searchParams.get('captcha');
 
     if (!url) {
         return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
@@ -51,6 +52,55 @@ export async function GET(request: Request) {
         }
 
         let html = await response.text();
+
+        function needsCaptcha(html: string, status: number) {
+            if (status === 403 || status === 503) return true;
+            const lower = html.toLowerCase();
+            return lower.includes('cf-browser-verification') ||
+                lower.includes('just a moment...') ||
+                lower.includes('enable javascript and cookies to continue') ||
+                lower.includes('cf-turnstile');
+        }
+
+        if (needsCaptcha(html, response.status)) {
+            if (captchaMode === 'browser') {
+                console.error(`[CAPTCHA] Opening ${targetUrl} in system browser...`);
+                const open = require('open');
+                await open(targetUrl);
+
+                // Wait 15 seconds for user to solve
+                await new Promise(r => setTimeout(r, 15000));
+
+                console.error('[CAPTCHA] Retrying fetch in Next.js backend...');
+                response = await fetch(targetUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Cookie': getCookiesForUrl(targetUrl)
+                    }
+                });
+                html = await response.text();
+            } else if (captchaMode === 'stealth') {
+                console.error(`[CAPTCHA] Booting Puppeteer stealth...`);
+                try {
+                    const puppeteer = require('puppeteer-extra');
+                    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+                    puppeteer.use(StealthPlugin());
+                    const browser = await puppeteer.launch({ headless: 'new' });
+                    const page = await browser.newPage();
+                    await page.goto(targetUrl, { waitUntil: 'networkidle2' });
+                    await new Promise(r => setTimeout(r, 6000));
+                    html = await page.content();
+                    await browser.close();
+                } catch (e: any) {
+                    console.error('[CAPTCHA ERROR] Puppeteer not installed. Run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth');
+                }
+            } else if (captchaMode === 'api') {
+                console.error('[CAPTCHA ERROR] 2Captcha API pending implementation...');
+            } else {
+                console.error(`[CAPTCHA DETECTED] No solver specified in Next.js request param!`);
+            }
+        }
 
         // Attempt Fallback if blocked
         if (isCookieWall(html)) {

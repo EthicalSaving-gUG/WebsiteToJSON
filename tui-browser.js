@@ -9,6 +9,7 @@ const path = require('path');
 
 const args = process.argv.slice(2);
 const debugMode = args.includes('--debug');
+const captchaMode = (args.find(a => a.startsWith('--captcha=')) || '').split('=')[1] || null;
 
 // Create a screen object.
 const screen = blessed.screen({
@@ -227,7 +228,64 @@ async function fetchAndRender(url) {
 
         let html = await response.text();
 
-        // Attempt Fallback if blocked
+        function needsCaptcha(html, status) {
+            if (status === 403 || status === 503) return true;
+            const lower = html.toLowerCase();
+            return lower.includes('cf-browser-verification') ||
+                lower.includes('just a moment...') ||
+                lower.includes('enable javascript and cookies to continue') ||
+                lower.includes('cf-turnstile');
+        }
+
+        if (needsCaptcha(html, response.status)) {
+            if (captchaMode === 'browser') {
+                contentBox.setContent(`{center}{yellow-fg}[CAPTCHA] OPENING SYSTEM BROWSER...{/yellow-fg}{/center}`);
+                screen.render();
+                const open = require('open');
+                await open(targetUrl);
+
+                contentBox.setContent(`{center}{yellow-fg}[CAPTCHA] PLEASE SOLVE IN BROWSER.{/yellow-fg}\n\n{white-fg}Waiting 15 seconds to automatically retry...{/white-fg}{/center}`);
+                screen.render();
+                await new Promise(r => setTimeout(r, 15000));
+
+                contentBox.setContent(`{center}{yellow-fg}[CAPTCHA] RETRYING FETCH...{/yellow-fg}{/center}`);
+                screen.render();
+                response = await fetch(targetUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Cookie': getCookiesForUrl(targetUrl)
+                    }
+                });
+                html = await response.text();
+            } else if (captchaMode === 'stealth') {
+                contentBox.setContent(`{center}{yellow-fg}[CAPTCHA] BOOTING PUPPETEER STEALTH...{/yellow-fg}{/center}`);
+                screen.render();
+                try {
+                    const puppeteer = require('puppeteer-extra');
+                    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+                    puppeteer.use(StealthPlugin());
+                    const browser = await puppeteer.launch({ headless: 'new' });
+                    const page = await browser.newPage();
+                    await page.goto(targetUrl, { waitUntil: 'networkidle2' });
+                    await new Promise(r => setTimeout(r, 6000));
+                    html = await page.content();
+                    await browser.close();
+                } catch (e) {
+                    contentBox.setContent(`{center}{red-fg}[CAPTCHA ERROR] Puppeteer not installed. Run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth{/red-fg}{/center}`);
+                    screen.render();
+                    await new Promise(r => setTimeout(r, 4000));
+                }
+            } else if (captchaMode === 'api') {
+                contentBox.setContent(`{center}{red-fg}[CAPTCHA ERROR] 2Captcha API pending implementation...{/red-fg}{/center}`);
+                screen.render();
+                await new Promise(r => setTimeout(r, 2000));
+            } else {
+                contentBox.setContent(`{center}{red-fg}[CAPTCHA DETECTED] No solver specified! Pass --captcha=browser|stealth|api{/red-fg}{/center}`);
+                screen.render();
+                await new Promise(r => setTimeout(r, 3000));
+            }
+        }
         if (isCookieWall(html)) {
             contentBox.setContent(`{center}{yellow-fg}COOKIE WALL DETECTED. ATTEMPTING BYPASS...{/yellow-fg}{/center}`);
             screen.render();

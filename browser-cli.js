@@ -10,17 +10,20 @@ async function main() {
     let url = '';
     let readerMode = false;
     let debugMode = false;
+    let captchaMode = null;
 
     for (const arg of args) {
         if (arg === '--reader') {
             readerMode = true;
         } else if (arg === '--debug') {
             debugMode = true;
+        } else if (arg.startsWith('--captcha=')) {
+            captchaMode = arg.split('=')[1];
         } else if (arg.startsWith('http')) {
             url = arg;
         } else {
             console.log(`Unknown argument: ${arg}`);
-            console.log('Usage: node browser-cli.js <url> [--reader]');
+            console.log('Usage: node browser-cli.js <url> [--reader] [--debug] [--captcha=browser|stealth|api]');
             process.exit(1);
         }
     }
@@ -68,6 +71,69 @@ async function main() {
         }
 
         let html = await response.text();
+
+        function needsCaptcha(html, status) {
+            if (status === 403 || status === 503) return true;
+            const lower = html.toLowerCase();
+            return lower.includes('cf-browser-verification') ||
+                lower.includes('just a moment...') ||
+                lower.includes('enable javascript and cookies to continue') ||
+                lower.includes('cf-turnstile');
+        }
+
+        if (needsCaptcha(html, response.status)) {
+            if (captchaMode === 'browser') {
+                console.error(`[CAPTCHA] Bot protection detected. Opening ${targetUrl} in system browser...`);
+                const open = require('open');
+                await open(targetUrl);
+                console.error('[CAPTCHA] Please solve the CAPTCHA in your web browser. Press ENTER when done...');
+                await new Promise(resolve => {
+                    const readline = require('readline').createInterface({ input: process.stdin, output: process.stdout });
+                    readline.question('', () => {
+                        readline.close();
+                        resolve();
+                    });
+                });
+                console.error('[CAPTCHA] Retrying fetch...');
+                response = await fetch(targetUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Cookie': getCookiesForUrl(targetUrl)
+                    }
+                });
+                html = await response.text();
+            } else if (captchaMode === 'stealth') {
+                console.error(`[CAPTCHA] Bot protection detected. Booting Puppeteer stealth browser...`);
+                try {
+                    const puppeteer = require('puppeteer-extra');
+                    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+                    puppeteer.use(StealthPlugin());
+                    const browser = await puppeteer.launch({ headless: 'new' });
+                    const page = await browser.newPage();
+                    await page.goto(targetUrl, { waitUntil: 'networkidle2' });
+                    await new Promise(r => setTimeout(r, 6000)); // Wait for Cloudflare
+                    html = await page.content();
+                    await browser.close();
+                } catch (e) {
+                    if (e.code === 'MODULE_NOT_FOUND') {
+                        console.error('[CAPTCHA ERROR] Puppeteer is not installed. Please run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth');
+                    } else {
+                        console.error('[CAPTCHA ERROR] Stealth bypass failed:', e.message);
+                    }
+                }
+            } else if (captchaMode === 'api') {
+                console.error(`[CAPTCHA] Bot protection detected. Sending to 2Captcha API...`);
+                const apiKey = process.env.TWOCAPTCHA_API_KEY;
+                if (!apiKey) {
+                    console.error('[CAPTCHA ERROR] TWOCAPTCHA_API_KEY environment variable is missing.');
+                } else {
+                    console.error('[CAPTCHA] 2Captcha Integration pending implementation of sitekey extraction.');
+                }
+            } else {
+                console.error(`[CAPTCHA] Bot protection detected, but no solver was specified! Pass --captcha=browser, --captcha=stealth, or --captcha=api.`);
+            }
+        }
 
         // Attempt Fallback if blocked
         if (isCookieWall(html)) {

@@ -51,6 +51,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                         readerMode: {
                             type: "boolean",
                             description: "If true, extracts only the main article text using Mozilla Readability instead of full page elements."
+                        },
+                        captcha: {
+                            type: "string",
+                            description: "Optional CAPTCHA bypass mode: 'browser' (opens the host system's web browser for manual solving), 'stealth' (spawns invisible Puppeteer to bypass), or 'api' (uses 2Captcha).",
+                            enum: ["browser", "stealth", "api"]
                         }
                     },
                     required: ["url"]
@@ -122,6 +127,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (request.params.name === "browse_website") {
         let targetUrl = request.params.arguments.url;
         const readerMode = request.params.arguments.readerMode === true;
+        const captchaMode = request.params.arguments.captcha || null;
 
         if (!targetUrl.startsWith('http')) {
             targetUrl = 'https://' + targetUrl;
@@ -145,6 +151,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             let html = await response.text();
+
+            function needsCaptcha(html, status) {
+                if (status === 403 || status === 503) return true;
+                const lower = html.toLowerCase();
+                return lower.includes('cf-browser-verification') ||
+                    lower.includes('just a moment...') ||
+                    lower.includes('enable javascript and cookies to continue') ||
+                    lower.includes('cf-turnstile');
+            }
+
+            if (needsCaptcha(html, response.status)) {
+                if (captchaMode === 'browser') {
+                    const open = require('open');
+                    await open(targetUrl);
+                    await new Promise(r => setTimeout(r, 15000));
+                    response = await fetch(targetUrl, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                            'Cookie': getCookiesForUrl(targetUrl)
+                        }
+                    });
+                    html = await response.text();
+                } else if (captchaMode === 'stealth') {
+                    try {
+                        const puppeteer = require('puppeteer-extra');
+                        const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+                        puppeteer.use(StealthPlugin());
+                        const browser = await puppeteer.launch({ headless: 'new' });
+                        const page = await browser.newPage();
+                        await page.goto(targetUrl, { waitUntil: 'networkidle2' });
+                        await new Promise(r => setTimeout(r, 6000));
+                        html = await page.content();
+                        await browser.close();
+                    } catch (e) {
+                        return {
+                            content: [{ type: "text", text: `Error: Puppeteer is not installed. Tell the user to run 'npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth' in the browser directory.` }],
+                            isError: true,
+                        };
+                    }
+                } else if (captchaMode === 'api') {
+                    // API implementation pending
+                } else {
+                    return {
+                        content: [{ type: "text", text: `Error: CAPTCHA bot protection detected, but no captcha solver arg was provided. Try again with captchaMode set to 'browser' or 'stealth'.` }],
+                        isError: true,
+                    };
+                }
+            }
 
             if (isCookieWall(html)) {
                 response = await fetch(targetUrl, {

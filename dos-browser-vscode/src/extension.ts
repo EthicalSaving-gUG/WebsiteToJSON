@@ -83,6 +83,53 @@ async function fetchAndParse(url: string, readerMode: boolean) {
 
     let html = await response.text();
 
+    const captchaMode = vscode.workspace.getConfiguration('dosBrowser').get<string>('captchaMode', '');
+
+    function needsCaptcha(html: string, status: number) {
+        if (status === 403 || status === 503) return true;
+        const lower = html.toLowerCase();
+        return lower.includes('cf-browser-verification') ||
+            lower.includes('just a moment...') ||
+            lower.includes('enable javascript and cookies to continue') ||
+            lower.includes('cf-turnstile');
+    }
+
+    if (needsCaptcha(html, response.status)) {
+        if (captchaMode === 'browser') {
+            const open = require('open');
+            await open(targetUrl);
+            vscode.window.showInformationMessage(`[DOS Browser] CAPTCHA detected on ${targetUrl}. Please solve it in your system browser. Waiting 15 seconds to retry...`);
+            await new Promise(r => setTimeout(r, 15000));
+
+            response = await fetch(targetUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Cookie': getCookiesForUrl(targetUrl)
+                }
+            });
+            html = await response.text();
+        } else if (captchaMode === 'stealth') {
+            try {
+                const puppeteer = require('puppeteer-extra');
+                const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+                puppeteer.use(StealthPlugin());
+                const browser = await puppeteer.launch({ headless: 'new' });
+                const page = await browser.newPage();
+                await page.goto(targetUrl, { waitUntil: 'networkidle2' });
+                await new Promise(r => setTimeout(r, 6000));
+                html = await page.content();
+                await browser.close();
+            } catch (e: any) {
+                vscode.window.showErrorMessage('Puppeteer is not installed in the workspace! Please run `npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth` in the dos-browser folder to use Stealth mode.');
+            }
+        } else if (captchaMode === 'api') {
+            vscode.window.showErrorMessage('2Captcha API is pending full implementation.');
+        } else {
+            vscode.window.showErrorMessage(`[DOS Browser] CAPTCHA detected, but no solver configured. Go to Settings > DOS Browser > Captcha Mode to select one.`);
+        }
+    }
+
     if (isCookieWall(html)) {
         response = await fetch(targetUrl, {
             headers: {

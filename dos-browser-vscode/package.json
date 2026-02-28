@@ -18,7 +18,28 @@
         "command": "dos-browser.start",
         "title": "Start DOS Browser"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "DOS Browser",
+      "properties": {
+        "dosBrowser.debugLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose JSDOM parsing error logging to workspace errors.txt."
+        },
+        "dosBrowser.captchaMode": {
+          "type": "string",
+          "enum": [
+            "",
+            "browser",
+            "stealth",
+            "api"
+          ],
+          "default": "",
+          "description": "Bypass method for Cloudflare/CAPTCHA walls. -> 'browser' opens your system browser | 'stealth' launches an invisible Chrome instance | 'api' uses 2Captcha."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
