@@ -2,22 +2,47 @@ import { NextResponse } from 'next/server';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import DOMPurify from 'dompurify';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const url = searchParams.get('url');
     const readerMode = searchParams.get('readerMode') === 'true';
+    const debugMode = searchParams.get('debug') === 'true';
 
     if (!url) {
         return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
     }
 
     try {
-        const response = await fetch(url, {
+        let targetUrl = url;
+
+        function getCookiesForUrl(u: string) {
+            let cookies = 'CONSENT=YES+cb; CookieConsent={stamp:\'%2B\',necessary:true,preferences:true,statistics:true,marketing:true,method:\'explicit\',ver:1,utc:1610000000000}; accept_cookies=true; cookie_notice_accepted=true;';
+            if (u.includes('golem.de')) cookies += ' golem_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
+            if (u.includes('spiegel.de')) cookies += ' spiegel_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
+            if (u.includes('zeit.de')) cookies += ' zeit_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
+            return cookies;
+        }
+
+        function isCookieWall(html: string) {
+            const lower = html.toLowerCase();
+            return lower.includes('id="sp_message_container"') ||
+                lower.includes('id="onetrust-consent-sdk"') ||
+                lower.includes('class="sp_message_container"') ||
+                lower.includes('consent.cmp') ||
+                lower.includes('id="gspmessage"') ||
+                lower.includes('golem pur bestellen') ||
+                (lower.includes('zustimmung') && lower.includes('datenschutz') && lower.includes('akzeptieren'));
+        }
+
+        let response = await fetch(targetUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.9',
+                'Cookie': getCookiesForUrl(targetUrl)
             }
         });
 
@@ -25,8 +50,47 @@ export async function GET(request: Request) {
             throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
         }
 
-        const html = await response.text();
-        const doc = new JSDOM(html, { url });
+        let html = await response.text();
+
+        // Attempt Fallback if blocked
+        if (isCookieWall(html)) {
+            // Fallback 1: Googlebot Spoofing
+            response = await fetch(targetUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Cookie': getCookiesForUrl(targetUrl)
+                }
+            });
+            html = await response.text();
+
+            // Fallback 2: Archive.org Web Cache
+            if (isCookieWall(html)) {
+                targetUrl = `https://web.archive.org/web/2/${targetUrl}`;
+                response = await fetch(targetUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+                });
+                html = await response.text();
+            }
+        }
+
+        const virtualConsole = new (require('jsdom').VirtualConsole)();
+
+        function logError(type: string, args: any[]) {
+            if (debugMode) {
+                try {
+                    const errPath = path.join(process.cwd(), 'errors.txt');
+                    const msg = `[${new Date().toISOString()}] [${type}] ${args.map(a => String(a?.message || a)).join(' ')}\n`;
+                    fs.appendFileSync(errPath, msg);
+                } catch (e) { }
+            }
+        }
+
+        virtualConsole.on("error", (...args: any[]) => logError("ERROR", args));
+        virtualConsole.on("warn", (...args: any[]) => logError("WARN", args));
+        virtualConsole.on("jsdomError", (...args: any[]) => logError("JSDOM_ERROR", args));
+
+        const doc = new JSDOM(html, { url: targetUrl, virtualConsole });
         const window = doc.window;
         const document = window.document;
 
@@ -41,7 +105,7 @@ export async function GET(request: Request) {
                 const cleanDOMPurify = DOMPurify(window as any);
                 const safeHtml = cleanDOMPurify.sanitize(article.content);
 
-                const cleanDoc = new JSDOM(`<html><body><h1>${article.title || ''}</h1>${safeHtml}</body></html>`, { url });
+                const cleanDoc = new JSDOM(`<html><body><h1>${article.title || ''}</h1>${safeHtml}</body></html>`, { url, virtualConsole });
                 workingDocument = cleanDoc.window.document;
             }
         }
@@ -51,6 +115,12 @@ export async function GET(request: Request) {
         let idCounter = 0;
 
         function isHidden(el: any) {
+            const idStr = String(el.id || '').toLowerCase();
+            const classStr = typeof el.className === 'string' ? el.className.toLowerCase() : '';
+            if (idStr.includes('cookie') || classStr.includes('cookie') || idStr.includes('consent') || classStr.includes('consent') || idStr.includes('onetrust') || classStr.includes('onetrust')) {
+                return true;
+            }
+
             if (!workingDocument.defaultView) return false;
             // Catch errors if getComputedStyle fails for any reason
             try {
@@ -62,7 +132,20 @@ export async function GET(request: Request) {
         }
 
         function cleanText(text: string | null) {
-            return text ? text.replace(/\s+/g, ' ').trim() : '';
+            const cleaned = text ? text.replace(/\s+/g, ' ').trim() : '';
+            if (!cleaned) return '';
+
+            const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
+            if (promptRegex.test(cleaned)) {
+                try {
+                    const csvPath = path.join(process.cwd(), 'promt_injections.csv');
+                    const logLine = `"${url}","${cleaned.replace(/"/g, '""')}"\n`;
+                    if (!fs.existsSync(csvPath)) fs.writeFileSync(csvPath, 'URL,Injection_Attempt\n');
+                    fs.appendFileSync(csvPath, logLine);
+                } catch (e) { }
+                return ''; // Safely filter it out
+            }
+            return cleaned;
         }
 
         function walkDOM(node: any) {

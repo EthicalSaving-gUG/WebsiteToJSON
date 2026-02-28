@@ -7,6 +7,9 @@ const DOMPurify = require('dompurify');
 const fs = require('fs');
 const path = require('path');
 
+const args = process.argv.slice(2);
+const debugMode = args.includes('--debug');
+
 // Create a screen object.
 const screen = blessed.screen({
     smartCSR: true,
@@ -99,8 +102,59 @@ const footer = blessed.box({
         fg: 'white',
         bg: 'blue'
     },
-    content: ' [ESC/q/C-c] Quit | [Enter] Focus URL | [Arrows] Scroll '
+    content: ' [ESC/C-c] Quit | [TAB] Switch Focus | [Enter] Go / Open Link | [Arrows] Navigate '
 });
+
+let currentResult = [];
+let focusableItems = [];
+let focusedItemIndex = -1;
+
+function renderParsedContent() {
+    let renderLines = [];
+    focusableItems = [];
+
+    for (const item of currentResult) {
+        if (['link', 'download', 'button'].includes(item.type)) {
+            item.linkIndex = focusableItems.length;
+            focusableItems.push({ ...item, lineApprox: renderLines.length });
+        }
+
+        const isFocused = (item.linkIndex === focusedItemIndex);
+
+        if (item.type === 'header') {
+            renderLines.push(`\n{yellow-fg}{bold}${'#'.repeat(item.level)} ${item.text}{/bold}{/yellow-fg}\n`);
+        } else if (item.type === 'link') {
+            if (isFocused) {
+                renderLines.push(`{black-bg}{white-fg}[ ${item.text} ]{/white-fg}{/black-bg} -> {gray-fg}${item.href}{/gray-fg}`);
+            } else {
+                renderLines.push(`{cyan-fg}[ ${item.text} ]{/cyan-fg} -> {gray-fg}${item.href}{/gray-fg}`);
+            }
+        } else if (item.type === 'download') {
+            if (isFocused) {
+                renderLines.push(`\n{white-bg}{black-fg}{bold} [V] DOWNLOAD: ${item.text} {/bold}{/black-fg}{/white-bg}\n    -> {cyan-fg}${item.href}{/cyan-fg}\n`);
+            } else {
+                renderLines.push(`\n{yellow-bg}{black-fg}{bold} [V] DOWNLOAD: ${item.text} {/bold}{/black-fg}{/yellow-bg}\n    -> {cyan-fg}${item.href}{/cyan-fg}\n`);
+            }
+        } else if (item.type === 'button') {
+            if (isFocused) {
+                renderLines.push(`{black-bg}{white-fg} < ${item.text} > {/white-fg}{/black-bg}`);
+            } else {
+                renderLines.push(`{white-bg}{black-fg} < ${item.text} > {/black-fg}{/white-bg}`);
+            }
+        } else if (item.type === 'image') {
+            renderLines.push(`\n{green-fg}[ IMG: ${item.alt || 'Unknown'} - ${item.src} ]{/green-fg}\n`);
+        } else if (item.type === 'text') {
+            renderLines.push(`${item.text}`);
+        }
+    }
+
+    if (renderLines.length === 0) {
+        contentBox.setContent(`{center}NO CONTENT FOUND FOR THIS PAGE.{/center}`);
+    } else {
+        contentBox.setContent(renderLines.join('\n'));
+    }
+    screen.render();
+}
 
 const downloadsBox = blessed.box({
     top: 'center',
@@ -130,11 +184,31 @@ async function fetchAndRender(url) {
     screen.render();
 
     try {
-        const response = await fetch(targetUrl, {
+        function getCookiesForUrl(u) {
+            let cookies = 'CONSENT=YES+cb; CookieConsent={stamp:\'%2B\',necessary:true,preferences:true,statistics:true,marketing:true,method:\'explicit\',ver:1,utc:1610000000000}; accept_cookies=true; cookie_notice_accepted=true;';
+            if (u.includes('golem.de')) cookies += ' golem_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
+            if (u.includes('spiegel.de')) cookies += ' spiegel_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
+            if (u.includes('zeit.de')) cookies += ' zeit_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
+            return cookies;
+        }
+
+        function isCookieWall(html) {
+            const lower = html.toLowerCase();
+            return lower.includes('id="sp_message_container"') ||
+                lower.includes('id="onetrust-consent-sdk"') ||
+                lower.includes('class="sp_message_container"') ||
+                lower.includes('consent.cmp') ||
+                lower.includes('id="gspmessage"') ||
+                lower.includes('golem pur bestellen') ||
+                (lower.includes('zustimmung') && lower.includes('datenschutz') && lower.includes('akzeptieren'));
+        }
+
+        let response = await fetch(targetUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.9',
+                'Cookie': getCookiesForUrl(targetUrl)
             }
         });
 
@@ -147,8 +221,50 @@ async function fetchAndRender(url) {
             return await startTuiDownload(targetUrl, response);
         }
 
-        const html = await response.text();
-        const doc = new JSDOM(html, { url: targetUrl });
+        let html = await response.text();
+
+        // Attempt Fallback if blocked
+        if (isCookieWall(html)) {
+            contentBox.setContent(`{center}{yellow-fg}COOKIE WALL DETECTED. ATTEMPTING BYPASS...{/yellow-fg}{/center}`);
+            screen.render();
+
+            response = await fetch(targetUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Cookie': getCookiesForUrl(targetUrl)
+                }
+            });
+            html = await response.text();
+
+            if (isCookieWall(html)) {
+                contentBox.setContent(`{center}{yellow-fg}STILL BLOCKED. FALLING BACK TO WEB CACHE...{/yellow-fg}{/center}`);
+                screen.render();
+                targetUrl = `https://web.archive.org/web/2/${targetUrl}`;
+                response = await fetch(targetUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+                });
+                html = await response.text();
+            }
+        }
+
+        const virtualConsole = new (require('jsdom').VirtualConsole)();
+
+        function logError(type, args) {
+            if (debugMode) {
+                try {
+                    const errPath = path.join(process.cwd(), 'errors.txt');
+                    const msg = `[${new Date().toISOString()}] [${type}] ${args.map(a => String(a?.message || a)).join(' ')}\n`;
+                    fs.appendFileSync(errPath, msg);
+                } catch (e) { }
+            }
+        }
+
+        virtualConsole.on("error", (...args) => logError("ERROR", args));
+        virtualConsole.on("warn", (...args) => logError("WARN", args));
+        virtualConsole.on("jsdomError", (...args) => logError("JSDOM_ERROR", args));
+
+        const doc = new JSDOM(html, { url: targetUrl, virtualConsole });
         const window = doc.window;
         const document = window.document;
 
@@ -160,7 +276,7 @@ async function fetchAndRender(url) {
         if (article && article.content) {
             const cleanDOMPurify = DOMPurify(window);
             const safeHtml = cleanDOMPurify.sanitize(article.content);
-            const cleanDoc = new JSDOM(`<html><body><h1>${article.title || ''}</h1>${safeHtml}</body></html>`, { url: targetUrl });
+            const cleanDoc = new JSDOM(`<html><body><h1>${article.title || ''}</h1>${safeHtml}</body></html>`, { url: targetUrl, virtualConsole });
             workingDocument = cleanDoc.window.document;
         }
 
@@ -168,6 +284,12 @@ async function fetchAndRender(url) {
         let idCounter = 0;
 
         function isHidden(el) {
+            const idStr = String(el.id || '').toLowerCase();
+            const classStr = typeof el.className === 'string' ? el.className.toLowerCase() : '';
+            if (idStr.includes('cookie') || classStr.includes('cookie') || idStr.includes('consent') || classStr.includes('consent') || idStr.includes('onetrust') || classStr.includes('onetrust')) {
+                return true;
+            }
+
             if (!workingDocument.defaultView) return false;
             try {
                 const style = workingDocument.defaultView.getComputedStyle(el);
@@ -178,7 +300,20 @@ async function fetchAndRender(url) {
         }
 
         function cleanText(text) {
-            return text ? text.replace(/\s+/g, ' ').trim() : '';
+            const cleaned = text ? text.replace(/\s+/g, ' ').trim() : '';
+            if (!cleaned) return '';
+
+            const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
+            if (promptRegex.test(cleaned)) {
+                try {
+                    const csvPath = path.join(process.cwd(), 'promt_injections.csv');
+                    const logLine = `"${targetUrl}","${cleaned.replace(/"/g, '""')}"\n`;
+                    if (!fs.existsSync(csvPath)) fs.writeFileSync(csvPath, 'URL,Injection_Attempt\n');
+                    fs.appendFileSync(csvPath, logLine);
+                } catch (e) { }
+                return ''; // Safely filter it out
+            }
+            return cleaned;
         }
 
         function walkDOM(node) {
@@ -238,31 +373,12 @@ async function fetchAndRender(url) {
 
         walkDOM(workingDocument.body);
 
-        // Convert the nodes to blessed colored text lines
-        let renderLines = [];
-        for (const item of result) {
-            if (item.type === 'header') {
-                renderLines.push(`\n{yellow-fg}{bold}${'#'.repeat(item.level)} ${item.text}{/bold}{/yellow-fg}\n`);
-            } else if (item.type === 'link') {
-                renderLines.push(`{cyan-fg}[ ${item.text} ]{/cyan-fg} -> {gray-fg}${item.href}{/gray-fg}`);
-            } else if (item.type === 'download') {
-                renderLines.push(`\n{yellow-bg}{black-fg}{bold} [V] DOWNLOAD: ${item.text} {/bold}{/black-fg}{/yellow-bg}\n    -> {cyan-fg}${item.href}{/cyan-fg}\n`);
-            } else if (item.type === 'button') {
-                renderLines.push(`{white-bg}{black-fg} < ${item.text} > {/black-fg}{/white-bg}`);
-            } else if (item.type === 'image') {
-                renderLines.push(`\n{green-fg}[ IMG: ${item.alt || 'Unknown'} - ${item.src} ]{/green-fg}\n`);
-            } else if (item.type === 'text') {
-                renderLines.push(`${item.text}`);
-            }
-        }
-
-        if (renderLines.length === 0) {
-            contentBox.setContent(`{center}NO CONTENT FOUND FOR THIS PAGE.{/center}`);
-        } else {
-            contentBox.setContent(renderLines.join('\n'));
-        }
+        currentResult = result;
+        focusedItemIndex = -1;
+        renderParsedContent();
 
         contentBox.scrollTo(0);
+        contentBox.focus(); // Auto-focus content so they can start arrowing immediately
         screen.render();
 
     } catch (err) {
@@ -341,7 +457,7 @@ urlInput.on('submit', (value) => {
 });
 
 // Quit on Escape, q, or Control-C.
-screen.key(['escape', 'q', 'C-c'], function (ch, key) {
+screen.key(['escape', 'C-c'], function (ch, key) {
     if (downloadsBox.hidden === false && key.name === 'escape') {
         downloadsBox.hide();
         screen.render();
@@ -351,10 +467,52 @@ screen.key(['escape', 'q', 'C-c'], function (ch, key) {
     return process.exit(0);
 });
 
-// Focus url on enter
-screen.key(['enter'], function (ch, key) {
-    if (screen.focused !== urlInput) {
+// Switch focus between URL input and Content box on Tab
+screen.key(['tab'], function (ch, key) {
+    if (screen.focused === urlInput) {
+        contentBox.focus();
+    } else {
         urlInput.focus();
+    }
+    screen.render();
+});
+
+// Link navigation inside Content Box using arrows
+contentBox.key(['up', 'down', 'left', 'right'], function (ch, key) {
+    if (focusableItems.length === 0) {
+        // Fall back to native scrolling if no links exist
+        if (key.name === 'up' || key.name === 'left') contentBox.scroll(-2);
+        if (key.name === 'down' || key.name === 'right') contentBox.scroll(2);
+        screen.render();
+        return;
+    }
+
+    if (key.name === 'up' || key.name === 'left') {
+        focusedItemIndex = Math.max(0, focusedItemIndex - 1);
+    } else if (key.name === 'down' || key.name === 'right') {
+        focusedItemIndex = Math.min(focusableItems.length - 1, focusedItemIndex + 1);
+    }
+
+    renderParsedContent();
+
+    // Try to scroll the highlighted line roughly into view
+    const item = focusableItems[focusedItemIndex];
+    if (item && item.lineApprox !== undefined) {
+        // Approximate scroll percentage
+        const perc = item.lineApprox / contentBox.getLines().length;
+        const targetScroll = Math.floor(perc * contentBox.getScrollHeight());
+        contentBox.scrollTo(targetScroll);
+    }
+    screen.render();
+});
+
+// Follow link when pressing Enter on Content Box
+contentBox.key(['enter'], function (ch, key) {
+    if (focusedItemIndex >= 0 && focusedItemIndex < focusableItems.length) {
+        const item = focusableItems[focusedItemIndex];
+        if (item.href) {
+            fetchAndRender(item.href);
+        }
     }
 });
 
