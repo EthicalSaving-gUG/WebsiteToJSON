@@ -44,3 +44,6 @@ next-env.d.ts
 dos-browser-vscode/node_modules/
 dos-browser-vscode/out/
 dos-browser-vscode/.vscode-test/
+
+# logs
+/logs/
