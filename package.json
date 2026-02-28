@@ -1,0 +1,36 @@
+{
+  "name": "temp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "clean": "taskkill /F /IM node.exe /T"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "autoprefixer": "^10.4.27",
+    "blessed": "^0.1.81",
+    "dompurify": "^3.1.5",
+    "jimp": "^0.22.12",
+    "jsdom": "^24.1.0",
+    "next": "16.1.6",
+    "postcss": "^8.5.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "tailwindcss": "^4.2.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/dompurify": "^3.0.5",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "typescript": "^5"
+  }
+}
