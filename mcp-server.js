@@ -6,6 +6,14 @@ const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontext
 const { Readability } = require('@mozilla/readability');
 const { JSDOM } = require('jsdom');
 const DOMPurify = require('dompurify');
+const fs = require('fs');
+const path = require('path');
+
+const configPath = path.join(__dirname, 'config.json');
+let globalConfig = {};
+if (fs.existsSync(configPath)) {
+    try { globalConfig = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) { }
+}
 
 const server = new Server({
     name: "dos-browser-mcp",
@@ -56,6 +64,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                             type: "string",
                             description: "Optional CAPTCHA bypass mode: 'browser' (opens the host system's web browser for manual solving), 'stealth' (spawns invisible Puppeteer to bypass), or 'api' (uses 2Captcha).",
                             enum: ["browser", "stealth", "api"]
+                        },
+                        report: {
+                            type: "boolean",
+                            description: "If true, returns a detailed diagnostic report alongside the content, documenting any obstacles (cookie walls, CAPTCHAs, ads, obstructive CSS, prompt injections) encountered during extraction."
                         }
                     },
                     required: ["url"]
@@ -127,7 +139,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (request.params.name === "browse_website") {
         let targetUrl = request.params.arguments.url;
         const readerMode = request.params.arguments.readerMode === true;
-        const captchaMode = request.params.arguments.captcha || null;
+        const captchaMode = request.params.arguments.captcha || globalConfig.captchaMode || null;
+        const reportMode = request.params.arguments.report === true || globalConfig.generateReports;
+
+        let diagnosticReport = {
+            url: targetUrl,
+            timestamp: new Date().toISOString(),
+            cookiewallBypassed: false,
+            captchaIntervened: false,
+            captchaSolverUsed: null,
+            promptInjectionsStripped: 0,
+            adsBlocked: 0,
+            obstructiveCssNodes: 0,
+            otherIssues: []
+        };
 
         if (!targetUrl.startsWith('http')) {
             targetUrl = 'https://' + targetUrl;
@@ -153,15 +178,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             let html = await response.text();
 
             function needsCaptcha(html, status) {
-                if (status === 403 || status === 503) return true;
+                if (status === 403 || status === 503) {
+                    diagnosticReport.captchaIntervened = true;
+                    return true;
+                }
                 const lower = html.toLowerCase();
-                return lower.includes('cf-browser-verification') ||
+                const hasCaptcha = lower.includes('cf-browser-verification') ||
                     lower.includes('just a moment...') ||
                     lower.includes('enable javascript and cookies to continue') ||
                     lower.includes('cf-turnstile');
+                if (hasCaptcha) diagnosticReport.captchaIntervened = true;
+                return hasCaptcha;
             }
 
             if (needsCaptcha(html, response.status)) {
+                diagnosticReport.captchaSolverUsed = captchaMode || 'none';
                 if (captchaMode === 'browser') {
                     const open = require('open');
                     await open(targetUrl);
@@ -202,6 +233,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             if (isCookieWall(html)) {
+                diagnosticReport.cookiewallBypassed = true;
                 response = await fetch(targetUrl, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
@@ -248,11 +280,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const idStr = String(el.id || '').toLowerCase();
                 const classStr = typeof el.className === 'string' ? el.className.toLowerCase() : '';
                 if (idStr.includes('cookie') || classStr.includes('cookie') || idStr.includes('consent') || classStr.includes('consent') || idStr.includes('onetrust') || classStr.includes('onetrust')) return true;
-                if (idStr.includes('ad-') || classStr.includes('ad-') || idStr.includes('advert') || classStr.includes('advert') || idStr.includes('banner') || classStr.includes('banner') || idStr.includes('sponsor') || classStr.includes('sponsor') || classStr.includes('outbrain') || classStr.includes('taboola') || classStr.includes('adsense')) return true;
+                if (idStr.includes('ad-') || classStr.includes('ad-') || idStr.includes('advert') || classStr.includes('advert') || idStr.includes('banner') || classStr.includes('banner') || idStr.includes('sponsor') || classStr.includes('sponsor') || classStr.includes('outbrain') || classStr.includes('taboola') || classStr.includes('adsense')) {
+                    diagnosticReport.adsBlocked++;
+                    return true;
+                }
                 if (!workingDocument.defaultView) return false;
                 try {
                     const style = workingDocument.defaultView.getComputedStyle(el);
-                    return (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0');
+                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || parseInt(style.zIndex || '0', 10) < 0) {
+                        diagnosticReport.obstructiveCssNodes++;
+                        return true;
+                    }
+                    return false;
                 } catch (e) { return false; }
             }
 
@@ -260,7 +299,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const cleaned = text ? text.replace(/\s+/g, ' ').trim() : '';
                 if (!cleaned) return '';
                 const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
-                if (promptRegex.test(cleaned)) return '';
+                if (promptRegex.test(cleaned)) {
+                    diagnosticReport.promptInjectionsStripped++;
+                    return '';
+                }
                 return cleaned;
             }
 
@@ -304,8 +346,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             walkDOM(workingDocument.body);
 
+            const outputText = result.join('\n\n');
+            if (reportMode) {
+                try {
+                    const urlObj = new URL(targetUrl);
+                    const domain = urlObj.hostname.replace(/[^a-z0-9]/gi, '_');
+                    const timestamp = new Date().getTime();
+                    const reportFileName = `report-${domain}-${timestamp}.json`;
+                    const reportPath = path.join(__dirname, 'Reports', reportFileName);
+                    fs.writeFileSync(reportPath, JSON.stringify(diagnosticReport, null, 2));
+                } catch (e) {
+                    diagnosticReport.otherIssues.push(`[REPORT ERROR] ${e.message}`);
+                }
+            }
+
             return {
-                content: [{ type: "text", text: result.join('\n\n') }],
+                content: [
+                    { type: "text", text: outputText },
+                    ...(reportMode ? [{ type: "text", text: `\n\n--- DIAGNOSTIC REPORT ---\n${JSON.stringify(diagnosticReport, null, 2)}` }] : [])
+                ],
             };
         } catch (error) {
             return {

@@ -6,17 +6,35 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export async function GET(request: Request) {
+    const configPath = path.join(process.cwd(), 'config.json');
+    let config: any = {};
+    if (fs.existsSync(configPath)) {
+        try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) { }
+    }
+
     const { searchParams } = new URL(request.url);
     const url = searchParams.get('url');
     const readerMode = searchParams.get('readerMode') === 'true';
-    const debugMode = searchParams.get('debug') === 'true';
-    const captchaMode = searchParams.get('captcha');
+    const debugMode = searchParams.get('debug') === 'true' || config.debugLogging;
+    const captchaMode = searchParams.get('captcha') || config.captchaMode;
+    const reportMode = searchParams.get('report') === 'true' || config.generateReports;
 
     if (!url) {
         return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
     }
 
     try {
+        let diagnosticReport: any = {
+            url: url,
+            timestamp: new Date().toISOString(),
+            cookiewallBypassed: false,
+            captchaIntervened: false,
+            captchaSolverUsed: null,
+            promptInjectionsStripped: 0,
+            adsBlocked: 0,
+            obstructiveCssNodes: 0,
+            otherIssues: []
+        };
         let targetUrl = url;
 
         function getCookiesForUrl(u: string) {
@@ -54,15 +72,21 @@ export async function GET(request: Request) {
         let html = await response.text();
 
         function needsCaptcha(html: string, status: number) {
-            if (status === 403 || status === 503) return true;
+            if (status === 403 || status === 503) {
+                diagnosticReport.captchaIntervened = true;
+                return true;
+            }
             const lower = html.toLowerCase();
-            return lower.includes('cf-browser-verification') ||
+            const hasCaptcha = lower.includes('cf-browser-verification') ||
                 lower.includes('just a moment...') ||
                 lower.includes('enable javascript and cookies to continue') ||
                 lower.includes('cf-turnstile');
+            if (hasCaptcha) diagnosticReport.captchaIntervened = true;
+            return hasCaptcha;
         }
 
         if (needsCaptcha(html, response.status)) {
+            diagnosticReport.captchaSolverUsed = captchaMode || 'none';
             if (captchaMode === 'browser') {
                 console.error(`[CAPTCHA] Opening ${targetUrl} in system browser...`);
                 const open = require('open');
@@ -104,6 +128,7 @@ export async function GET(request: Request) {
 
         // Attempt Fallback if blocked
         if (isCookieWall(html)) {
+            diagnosticReport.cookiewallBypassed = true;
             // Fallback 1: Googlebot Spoofing
             response = await fetch(targetUrl, {
                 headers: {
@@ -175,6 +200,7 @@ export async function GET(request: Request) {
 
             // Ad Blocker Filter
             if (idStr.includes('ad-') || classStr.includes('ad-') || idStr.includes('advert') || classStr.includes('advert') || idStr.includes('banner') || classStr.includes('banner') || idStr.includes('sponsor') || classStr.includes('sponsor') || classStr.includes('outbrain') || classStr.includes('taboola') || classStr.includes('adsense')) {
+                diagnosticReport.adsBlocked++;
                 return true;
             }
 
@@ -182,7 +208,11 @@ export async function GET(request: Request) {
             // Catch errors if getComputedStyle fails for any reason
             try {
                 const style = workingDocument.defaultView.getComputedStyle(el);
-                return (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0');
+                if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || parseInt(style.zIndex || '0', 10) < 0) {
+                    diagnosticReport.obstructiveCssNodes++;
+                    return true;
+                }
+                return false;
             } catch (e) {
                 return false;
             }
@@ -194,6 +224,7 @@ export async function GET(request: Request) {
 
             const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
             if (promptRegex.test(cleaned)) {
+                diagnosticReport.promptInjectionsStripped++;
                 try {
                     const csvPath = path.join(process.cwd(), 'promt_injections.csv');
                     const logLine = `"${url}","${cleaned.replace(/"/g, '""')}"\n`;
@@ -326,7 +357,20 @@ export async function GET(request: Request) {
 
         walkDOM(workingDocument.body);
 
-        return NextResponse.json({ success: true, data: result });
+        if (reportMode) {
+            try {
+                const urlObj = new URL(targetUrl);
+                const domain = urlObj.hostname.replace(/[^a-z0-9]/gi, '_');
+                const timestamp = new Date().getTime();
+                const reportFileName = `report-${domain}-${timestamp}.json`;
+                const reportPath = path.join(process.cwd(), 'Reports', reportFileName);
+                fs.writeFileSync(reportPath, JSON.stringify(diagnosticReport, null, 2));
+            } catch (e: any) {
+                diagnosticReport.otherIssues.push(`[REPORT ERROR] Failed to save report: ${e.message}`);
+            }
+        }
+
+        return NextResponse.json({ success: true, data: result, report: (reportMode ? diagnosticReport : undefined) });
 
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

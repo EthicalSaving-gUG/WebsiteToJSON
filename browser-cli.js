@@ -6,15 +6,36 @@ const { JSDOM } = require('jsdom');
 const DOMPurify = require('dompurify');
 
 async function main() {
+    const configPath = require('path').join(__dirname, 'config.json');
+    let config = {};
+    if (fs.existsSync(configPath)) {
+        try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) { }
+    }
+
     const args = process.argv.slice(2);
     let url = '';
     let readerMode = false;
-    let debugMode = false;
-    let captchaMode = null;
+    let debugMode = config.debugLogging || false;
+    let captchaMode = config.captchaMode || null;
+    let reportMode = config.generateReports || false;
+
+    let diagnosticReport = {
+        url: '',
+        timestamp: new Date().toISOString(),
+        cookiewallBypassed: false,
+        captchaIntervened: false,
+        captchaSolverUsed: null,
+        promptInjectionsStripped: 0,
+        adsBlocked: 0,
+        obstructiveCssNodes: 0,
+        otherIssues: []
+    };
 
     for (const arg of args) {
         if (arg === '--reader') {
             readerMode = true;
+        } else if (arg === '--report') {
+            reportMode = true;
         } else if (arg === '--debug') {
             debugMode = true;
         } else if (arg.startsWith('--captcha=')) {
@@ -23,7 +44,7 @@ async function main() {
             url = arg;
         } else {
             console.log(`Unknown argument: ${arg}`);
-            console.log('Usage: node browser-cli.js <url> [--reader] [--debug] [--captcha=browser|stealth|api]');
+            console.log('Usage: node browser-cli.js <url> [--reader] [--debug] [--report] [--captcha=browser|stealth|api]');
             process.exit(1);
         }
     }
@@ -57,6 +78,7 @@ async function main() {
         }
 
         console.error(`Fetching ${targetUrl}...`);
+        diagnosticReport.url = targetUrl;
         let response = await fetch(targetUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -73,15 +95,21 @@ async function main() {
         let html = await response.text();
 
         function needsCaptcha(html, status) {
-            if (status === 403 || status === 503) return true;
+            if (status === 403 || status === 503) {
+                diagnosticReport.captchaIntervened = true;
+                return true;
+            }
             const lower = html.toLowerCase();
-            return lower.includes('cf-browser-verification') ||
+            const hasCaptcha = lower.includes('cf-browser-verification') ||
                 lower.includes('just a moment...') ||
                 lower.includes('enable javascript and cookies to continue') ||
                 lower.includes('cf-turnstile');
+            if (hasCaptcha) diagnosticReport.captchaIntervened = true;
+            return hasCaptcha;
         }
 
         if (needsCaptcha(html, response.status)) {
+            diagnosticReport.captchaSolverUsed = captchaMode || 'none';
             if (captchaMode === 'browser') {
                 console.error(`[CAPTCHA] Bot protection detected. Opening ${targetUrl} in system browser...`);
                 const open = require('open');
@@ -137,6 +165,7 @@ async function main() {
 
         // Attempt Fallback if blocked
         if (isCookieWall(html)) {
+            diagnosticReport.cookiewallBypassed = true;
             console.error(`Cookie wall detected on ${targetUrl}. Attempting SEO bot bypass...`);
             response = await fetch(targetUrl, {
                 headers: {
@@ -208,7 +237,11 @@ async function main() {
             if (!workingDocument.defaultView) return false;
             try {
                 const style = workingDocument.defaultView.getComputedStyle(el);
-                return (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0');
+                if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || style.zIndex < 0) {
+                    diagnosticReport.obstructiveCssNodes++;
+                    return true;
+                }
+                return false;
             } catch (e) {
                 return false;
             }
@@ -220,6 +253,7 @@ async function main() {
 
             const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
             if (promptRegex.test(cleaned)) {
+                diagnosticReport.promptInjectionsStripped++;
                 try {
                     const csvPath = require('path').join(process.cwd(), 'promt_injections.csv');
                     const logLine = `"${url}","${cleaned.replace(/"/g, '""')}"\n`;
@@ -351,6 +385,21 @@ async function main() {
         }
 
         walkDOM(workingDocument.body);
+
+        if (reportMode) {
+            try {
+                const urlObj = new URL(targetUrl);
+                const domain = urlObj.hostname.replace(/[^a-z0-9]/gi, '_');
+                const timestamp = new Date().getTime();
+                const reportFileName = `report-${domain}-${timestamp}.json`;
+                const reportPath = require('path').join(process.cwd(), 'Reports', reportFileName);
+                require('fs').writeFileSync(reportPath, JSON.stringify(diagnosticReport, null, 2));
+                console.error(`[REPORT] Extraction diagnostic saved to ${reportPath}`);
+            } catch (e) {
+                console.error(`[REPORT ERROR] Failed to save report: ${e.message}`);
+                diagnosticReport.otherIssues.push(`[REPORT ERROR] Failed to save report: ${e.message}`);
+            }
+        }
 
         console.log(JSON.stringify(result, null, 2));
 

@@ -38,6 +38,7 @@ export default function DOSBrowser() {
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
     const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
+    const [reportLoading, setReportLoading] = useState(false);
 
     const t = {
         textMain: theme === 'white' ? 'text-gray-200' : 'text-green-500',
@@ -126,6 +127,32 @@ export default function DOSBrowser() {
             setError(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchReport = async () => {
+        if (!url || reportLoading) return;
+        const targetUrl = url.startsWith('http') ? url : `https://${url}`;
+        setReportLoading(true);
+        try {
+            const res = await fetch(`/api/browse?url=${encodeURIComponent(targetUrl)}&readerMode=${readerMode}&report=true`);
+            const data = await res.json();
+            if (data.report) {
+                const blob = new Blob([JSON.stringify(data.report, null, 2)], { type: 'application/json' });
+                const href = URL.createObjectURL(blob);
+                const domain = new URL(targetUrl).hostname.replace(/[^a-z0-9]/gi, '_');
+                const link = document.createElement('a');
+                link.href = href;
+                link.download = `report-${domain}-${Date.now()}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(href);
+            }
+        } catch (e) {
+            // silently fail
+        } finally {
+            setReportLoading(false);
         }
     };
 
@@ -367,6 +394,14 @@ export default function DOSBrowser() {
                         className={`px-3 py-1 text-xs border uppercase font-bold transition-colors ${t.borderMain} ${t.textMain} ${t.bgHover} hover:text-black`}
                     >
                         ASCII: {showAscii ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                        onClick={fetchReport}
+                        disabled={!url || reportLoading}
+                        title="Generate extraction diagnostic report and download as JSON"
+                        className={`px-3 py-1 text-xs border uppercase font-bold transition-colors border-yellow-600 text-yellow-500 hover:bg-yellow-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed`}
+                    >
+                        {reportLoading ? 'REPORTING...' : '[REPORT]'}
                     </button>
                     <button
                         onClick={() => setTheme(theme === 'green' ? 'white' : 'green')}

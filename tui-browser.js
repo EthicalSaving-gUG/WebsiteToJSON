@@ -7,9 +7,16 @@ const DOMPurify = require('dompurify');
 const fs = require('fs');
 const path = require('path');
 
+const configPath = path.join(__dirname, 'config.json');
+let config = {};
+if (fs.existsSync(configPath)) {
+    try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) { }
+}
+
 const args = process.argv.slice(2);
-const debugMode = args.includes('--debug');
-const captchaMode = (args.find(a => a.startsWith('--captcha=')) || '').split('=')[1] || null;
+const debugMode = args.includes('--debug') || (config.debugLogging || false);
+const captchaMode = (args.find(a => a.startsWith('--captcha=')) || '').split('=')[1] || (config.captchaMode || null);
+const reportMode = args.includes('--report') || (config.generateReports || false);
 
 // Create a screen object.
 const screen = blessed.screen({
@@ -188,6 +195,18 @@ async function fetchAndRender(url) {
     contentBox.setContent(`{center}LOADING ${targetUrl}...{/center}`);
     screen.render();
 
+    let diagnosticReport = {
+        url: targetUrl,
+        timestamp: new Date().toISOString(),
+        cookiewallBypassed: false,
+        captchaIntervened: false,
+        captchaSolverUsed: null,
+        promptInjectionsStripped: 0,
+        adsBlocked: 0,
+        obstructiveCssNodes: 0,
+        otherIssues: []
+    };
+
     try {
         function getCookiesForUrl(u) {
             let cookies = 'CONSENT=YES+cb; CookieConsent={stamp:\'%2B\',necessary:true,preferences:true,statistics:true,marketing:true,method:\'explicit\',ver:1,utc:1610000000000}; accept_cookies=true; cookie_notice_accepted=true;';
@@ -229,15 +248,21 @@ async function fetchAndRender(url) {
         let html = await response.text();
 
         function needsCaptcha(html, status) {
-            if (status === 403 || status === 503) return true;
+            if (status === 403 || status === 503) {
+                diagnosticReport.captchaIntervened = true;
+                return true;
+            }
             const lower = html.toLowerCase();
-            return lower.includes('cf-browser-verification') ||
+            const hasCaptcha = lower.includes('cf-browser-verification') ||
                 lower.includes('just a moment...') ||
                 lower.includes('enable javascript and cookies to continue') ||
                 lower.includes('cf-turnstile');
+            if (hasCaptcha) diagnosticReport.captchaIntervened = true;
+            return hasCaptcha;
         }
 
         if (needsCaptcha(html, response.status)) {
+            diagnosticReport.captchaSolverUsed = captchaMode || 'none';
             if (captchaMode === 'browser') {
                 contentBox.setContent(`{center}{yellow-fg}[CAPTCHA] OPENING SYSTEM BROWSER...{/yellow-fg}{/center}`);
                 screen.render();
@@ -287,6 +312,7 @@ async function fetchAndRender(url) {
             }
         }
         if (isCookieWall(html)) {
+            diagnosticReport.cookiewallBypassed = true;
             contentBox.setContent(`{center}{yellow-fg}COOKIE WALL DETECTED. ATTEMPTING BYPASS...{/yellow-fg}{/center}`);
             screen.render();
 
@@ -356,13 +382,18 @@ async function fetchAndRender(url) {
 
             // Ad Blocker Filter
             if (idStr.includes('ad-') || classStr.includes('ad-') || idStr.includes('advert') || classStr.includes('advert') || idStr.includes('banner') || classStr.includes('banner') || idStr.includes('sponsor') || classStr.includes('sponsor') || classStr.includes('outbrain') || classStr.includes('taboola') || classStr.includes('adsense')) {
+                diagnosticReport.adsBlocked++;
                 return true;
             }
 
             if (!workingDocument.defaultView) return false;
             try {
                 const style = workingDocument.defaultView.getComputedStyle(el);
-                return (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0');
+                if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || style.zIndex < 0) {
+                    diagnosticReport.obstructiveCssNodes++;
+                    return true;
+                }
+                return false;
             } catch (e) {
                 return false;
             }
@@ -374,6 +405,7 @@ async function fetchAndRender(url) {
 
             const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
             if (promptRegex.test(cleaned)) {
+                diagnosticReport.promptInjectionsStripped++;
                 try {
                     const csvPath = path.join(process.cwd(), 'promt_injections.csv');
                     const logLine = `"${targetUrl}","${cleaned.replace(/"/g, '""')}"\n`;
@@ -448,6 +480,22 @@ async function fetchAndRender(url) {
 
         contentBox.scrollTo(0);
         contentBox.focus(); // Auto-focus content so they can start arrowing immediately
+
+        if (reportMode) {
+            try {
+                const urlObj = new URL(targetUrl);
+                const domain = urlObj.hostname.replace(/[^a-z0-9]/gi, '_');
+                const timestamp = new Date().getTime();
+                const reportFileName = `report-${domain}-${timestamp}.json`;
+                const reportPath = path.join(process.cwd(), 'Reports', reportFileName);
+                fs.writeFileSync(reportPath, JSON.stringify(diagnosticReport, null, 2));
+                // Show brief success toast in TUI
+                const originalTitle = screen.title;
+                screen.title = `[REPORT SAVED TO Reports/${reportFileName}]`;
+                setTimeout(() => { screen.title = originalTitle; screen.render(); }, 3000);
+            } catch (e) { }
+        }
+
         screen.render();
 
     } catch (err) {
