@@ -10,6 +10,7 @@
     "clean": "taskkill /F /IM node.exe /T"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "@mozilla/readability": "^0.5.0",
     "autoprefixer": "^10.4.27",
     "blessed": "^0.1.81",

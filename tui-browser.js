@@ -426,7 +426,9 @@ async function startTuiDownload(url, response) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 if (value) {
-                    fileStream.write(value);
+                    if (!fileStream.write(value)) {
+                        await new Promise(r => fileStream.once('drain', r));
+                    }
                     loaded += value.length;
 
                     let pBar = '';
@@ -538,5 +540,11 @@ screen.on('mouse', function (data) {
     }
 });
 
-urlInput.focus();
+const initialUrl = args.find(a => !a.startsWith('--'));
+if (initialUrl) {
+    urlInput.setValue(initialUrl);
+    fetchAndRender(initialUrl);
+} else {
+    urlInput.focus();
+}
 screen.render();
