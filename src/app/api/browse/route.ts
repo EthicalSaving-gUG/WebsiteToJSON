@@ -117,7 +117,14 @@ export async function GET(request: Request) {
         function isHidden(el: any) {
             const idStr = String(el.id || '').toLowerCase();
             const classStr = typeof el.className === 'string' ? el.className.toLowerCase() : '';
+
+            // Cookie Consent Filter
             if (idStr.includes('cookie') || classStr.includes('cookie') || idStr.includes('consent') || classStr.includes('consent') || idStr.includes('onetrust') || classStr.includes('onetrust')) {
+                return true;
+            }
+
+            // Ad Blocker Filter
+            if (idStr.includes('ad-') || classStr.includes('ad-') || idStr.includes('advert') || classStr.includes('advert') || idStr.includes('banner') || classStr.includes('banner') || idStr.includes('sponsor') || classStr.includes('sponsor') || classStr.includes('outbrain') || classStr.includes('taboola') || classStr.includes('adsense')) {
                 return true;
             }
 

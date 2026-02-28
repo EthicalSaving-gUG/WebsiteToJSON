@@ -113,6 +113,10 @@ function renderParsedContent() {
     let renderLines = [];
     focusableItems = [];
 
+    function sanitizeBlessed(str) {
+        return (str || '').replace(/\{/g, '{open}').replace(/\}/g, '{close}');
+    }
+
     for (const item of currentResult) {
         if (['link', 'download', 'button'].includes(item.type)) {
             item.linkIndex = focusableItems.length;
@@ -122,29 +126,29 @@ function renderParsedContent() {
         const isFocused = (item.linkIndex === focusedItemIndex);
 
         if (item.type === 'header') {
-            renderLines.push(`\n{yellow-fg}{bold}${'#'.repeat(item.level)} ${item.text}{/bold}{/yellow-fg}\n`);
+            renderLines.push(`\n{yellow-fg}{bold}${'#'.repeat(item.level)} ${sanitizeBlessed(item.text)}{/bold}{/yellow-fg}\n`);
         } else if (item.type === 'link') {
             if (isFocused) {
-                renderLines.push(`{black-bg}{white-fg}[ ${item.text} ]{/white-fg}{/black-bg} -> {gray-fg}${item.href}{/gray-fg}`);
+                renderLines.push(`{black-bg}{white-fg}[ ${sanitizeBlessed(item.text)} ]{/white-fg}{/black-bg} -> {gray-fg}${item.href}{/gray-fg}`);
             } else {
-                renderLines.push(`{cyan-fg}[ ${item.text} ]{/cyan-fg} -> {gray-fg}${item.href}{/gray-fg}`);
+                renderLines.push(`{cyan-fg}[ ${sanitizeBlessed(item.text)} ]{/cyan-fg} -> {gray-fg}${item.href}{/gray-fg}`);
             }
         } else if (item.type === 'download') {
             if (isFocused) {
-                renderLines.push(`\n{white-bg}{black-fg}{bold} [V] DOWNLOAD: ${item.text} {/bold}{/black-fg}{/white-bg}\n    -> {cyan-fg}${item.href}{/cyan-fg}\n`);
+                renderLines.push(`\n{white-bg}{black-fg}{bold} [V] DOWNLOAD: ${sanitizeBlessed(item.text)} {/bold}{/black-fg}{/white-bg}\n    -> {cyan-fg}${item.href}{/cyan-fg}\n`);
             } else {
-                renderLines.push(`\n{yellow-bg}{black-fg}{bold} [V] DOWNLOAD: ${item.text} {/bold}{/black-fg}{/yellow-bg}\n    -> {cyan-fg}${item.href}{/cyan-fg}\n`);
+                renderLines.push(`\n{yellow-bg}{black-fg}{bold} [V] DOWNLOAD: ${sanitizeBlessed(item.text)} {/bold}{/black-fg}{/yellow-bg}\n    -> {cyan-fg}${item.href}{/cyan-fg}\n`);
             }
         } else if (item.type === 'button') {
             if (isFocused) {
-                renderLines.push(`{black-bg}{white-fg} < ${item.text} > {/white-fg}{/black-bg}`);
+                renderLines.push(`{black-bg}{white-fg} < ${sanitizeBlessed(item.text)} > {/white-fg}{/black-bg}`);
             } else {
-                renderLines.push(`{white-bg}{black-fg} < ${item.text} > {/black-fg}{/white-bg}`);
+                renderLines.push(`{white-bg}{black-fg} < ${sanitizeBlessed(item.text)} > {/black-fg}{/white-bg}`);
             }
         } else if (item.type === 'image') {
-            renderLines.push(`\n{green-fg}[ IMG: ${item.alt || 'Unknown'} - ${item.src} ]{/green-fg}\n`);
+            renderLines.push(`\n{green-fg}[ IMG: ${sanitizeBlessed(item.alt || 'Unknown')} - ${item.src} ]{/green-fg}\n`);
         } else if (item.type === 'text') {
-            renderLines.push(`${item.text}`);
+            renderLines.push(`${sanitizeBlessed(item.text)}`);
         }
     }
 
@@ -286,7 +290,14 @@ async function fetchAndRender(url) {
         function isHidden(el) {
             const idStr = String(el.id || '').toLowerCase();
             const classStr = typeof el.className === 'string' ? el.className.toLowerCase() : '';
+
+            // Cookie Consent Filter
             if (idStr.includes('cookie') || classStr.includes('cookie') || idStr.includes('consent') || classStr.includes('consent') || idStr.includes('onetrust') || classStr.includes('onetrust')) {
+                return true;
+            }
+
+            // Ad Blocker Filter
+            if (idStr.includes('ad-') || classStr.includes('ad-') || idStr.includes('advert') || classStr.includes('advert') || idStr.includes('banner') || classStr.includes('banner') || idStr.includes('sponsor') || classStr.includes('sponsor') || classStr.includes('outbrain') || classStr.includes('taboola') || classStr.includes('adsense')) {
                 return true;
             }
 
