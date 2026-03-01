@@ -17,6 +17,8 @@ const args = process.argv.slice(2);
 const debugMode = args.includes('--debug') || (config.debugLogging || false);
 const captchaMode = (args.find(a => a.startsWith('--captcha=')) || '').split('=')[1] || (config.captchaMode || null);
 const reportMode = args.includes('--report') || (config.generateReports || false);
+const readerMode = args.includes('--reader') || false;
+const jsRender = args.includes('--js') || (config.jsRender || false);
 
 // Create a screen object.
 const screen = blessed.screen({
@@ -157,13 +159,21 @@ function renderParsedContent() {
             renderLines.push(`\n{green-fg}[ IMG: ${sanitizeBlessed(item.alt || 'Unknown')} - ${item.src} ]{/green-fg}\n`);
         } else if (item.type === 'text') {
             renderLines.push(`${sanitizeBlessed(item.text)}`);
+        } else if (item.type === 'input') {
+            const lbl = item.label ? `(Label: "${sanitizeBlessed(item.label)}")` : '';
+            if (isFocused) {
+                renderLines.push(`{black-bg}{white-fg}[ ${item.inputType.toUpperCase()}: ________ ] ${lbl}{/white-fg}{/black-bg}`);
+            } else {
+                renderLines.push(`{white-bg}{black-fg}[ ${item.inputType.toUpperCase()}: ________ ] ${lbl}{/black-fg}{/white-bg}`);
+            }
         }
     }
 
     if (renderLines.length === 0) {
         contentBox.setContent(`{center}NO CONTENT FOUND FOR THIS PAGE.{/center}`);
     } else {
-        contentBox.setContent(renderLines.join('\n'));
+        const outStr = renderLines.join('\n');
+        contentBox.setContent(outStr);
     }
     screen.render();
 }
@@ -185,6 +195,21 @@ screen.append(header);
 screen.append(contentBox);
 screen.append(footer);
 screen.append(downloadsBox);
+
+function getPuppeteer() {
+    let p;
+    try {
+        require.resolve('puppeteer-extra');
+    } catch (e) {
+        contentBox.setContent(`{center}{yellow-fg}[DEPENDENCY] Puppeteer not found. Downloading dynamically... This may take a minute.{/yellow-fg}{/center}`);
+        screen.render();
+        require('child_process').execSync('npm install --no-save puppeteer puppeteer-extra puppeteer-extra-plugin-stealth', { stdio: 'ignore', cwd: process.cwd() });
+    }
+    p = require('puppeteer-extra');
+    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+    p.use(StealthPlugin());
+    return p;
+}
 
 async function fetchAndRender(url) {
     let targetUrl = url;
@@ -209,7 +234,7 @@ async function fetchAndRender(url) {
 
     try {
         function getCookiesForUrl(u) {
-            let cookies = 'CONSENT=YES+cb; CookieConsent={stamp:\'%2B\',necessary:true,preferences:true,statistics:true,marketing:true,method:\'explicit\',ver:1,utc:1610000000000}; accept_cookies=true; cookie_notice_accepted=true;';
+            let cookies = 'cookieyes-consent=consent:yes; CONSENT=YES+cb; CookieConsent={stamp:\'%2B\',necessary:true,preferences:true,statistics:true,marketing:true,method:\'explicit\',ver:1,utc:1610000000000}; accept_cookies=true; cookie_notice_accepted=true;';
             if (u.includes('golem.de')) cookies += ' golem_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
             if (u.includes('spiegel.de')) cookies += ' spiegel_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
             if (u.includes('zeit.de')) cookies += ' zeit_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
@@ -220,6 +245,7 @@ async function fetchAndRender(url) {
             const lower = html.toLowerCase();
             return lower.includes('id="sp_message_container"') ||
                 lower.includes('id="onetrust-consent-sdk"') ||
+                lower.includes('id="cookieyes-banner"') ||
                 lower.includes('class="sp_message_container"') ||
                 lower.includes('consent.cmp') ||
                 lower.includes('id="gspmessage"') ||
@@ -227,25 +253,72 @@ async function fetchAndRender(url) {
                 (lower.includes('zustimmung') && lower.includes('datenschutz') && lower.includes('akzeptieren'));
         }
 
-        let response = await fetch(targetUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Cookie': getCookiesForUrl(targetUrl)
+        let html = '';
+        let contentType = '';
+        let response = null;
+
+        if (jsRender) {
+            diagnosticReport.otherIssues.push('[JS_RENDER] Using forced Puppeteer engine.');
+            contentBox.setContent(`{center}{yellow-fg}[JS_RENDER] Forced JS rendering mode active. Booting Puppeteer...{/yellow-fg}{/center}`);
+            screen.render();
+            try {
+                const puppeteer = getPuppeteer();
+                const pBrowser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+                const pPage = await pBrowser.newPage();
+                await pPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                await pPage.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+                await new Promise(r => setTimeout(r, 4000));
+
+                // Aggressively attempt to click "Accept Cookies" banners
+                await pPage.evaluate(() => {
+                    const btn = Array.from(document.querySelectorAll('button, a, div')).find(el => {
+                        const t = (el.textContent || '').toLowerCase();
+                        return (t.includes('accept') || t.includes('akzeptieren') || t.includes('agree') || t.includes('zustimmen') || t.includes('allow all')) &&
+                            (t.includes('cookie') || el.className.toLowerCase().includes('cookie') || el.id.toLowerCase().includes('cookie'));
+                    });
+                    if (btn) btn.click();
+
+                    // Hard remove common banner containers
+                    document.querySelectorAll('div, section').forEach(el => {
+                        const id = (el.id || '').toLowerCase();
+                        const cls = (el.className || '').toLowerCase();
+                        if (id.includes('cookie') || cls.includes('cookie') || id.includes('consent') || cls.includes('consent') || id.includes('onetrust') || cls.includes('onetrust') || id.includes('sp_message')) {
+                            el.remove();
+                        }
+                    });
+                });
+                await new Promise(r => setTimeout(r, 1500));
+
+                html = await pPage.content();
+                await pBrowser.close();
+                contentBox.setContent(`{center}{green-fg}[JS_RENDER] Puppeteer extraction complete.{/green-fg}{/center}`);
+                screen.render();
+            } catch (e) {
+                contentBox.setContent(`{center}{red-fg}[JS_RENDER ERROR] Puppeteer not installed: ${e.message}{/red-fg}{/center}`);
+                screen.render();
+                process.exit(1);
             }
-        });
+        } else {
+            response = await fetch(targetUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Cookie': getCookiesForUrl(targetUrl)
+                }
+            });
 
-        if (!response.ok) {
-            throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+            }
+
+            contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml') && !contentType.includes('application/xml')) {
+                return await startTuiDownload(targetUrl, response);
+            }
+
+            html = await response.text();
         }
-
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml') && !contentType.includes('application/xml')) {
-            return await startTuiDownload(targetUrl, response);
-        }
-
-        let html = await response.text();
 
         function needsCaptcha(html, status) {
             if (status === 403 || status === 503) {
@@ -261,7 +334,7 @@ async function fetchAndRender(url) {
             return hasCaptcha;
         }
 
-        if (needsCaptcha(html, response.status)) {
+        if (needsCaptcha(html, response?.status || 200)) {
             diagnosticReport.captchaSolverUsed = captchaMode || 'none';
             if (captchaMode === 'browser') {
                 contentBox.setContent(`{center}{yellow-fg}[CAPTCHA] OPENING SYSTEM BROWSER...{/yellow-fg}{/center}`);
@@ -287,9 +360,7 @@ async function fetchAndRender(url) {
                 contentBox.setContent(`{center}{yellow-fg}[CAPTCHA] BOOTING PUPPETEER STEALTH...{/yellow-fg}{/center}`);
                 screen.render();
                 try {
-                    const puppeteer = require('puppeteer-extra');
-                    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-                    puppeteer.use(StealthPlugin());
+                    const puppeteer = getPuppeteer();
                     const browser = await puppeteer.launch({ headless: 'new' });
                     const page = await browser.newPage();
                     await page.goto(targetUrl, { waitUntil: 'networkidle2' });
@@ -311,6 +382,65 @@ async function fetchAndRender(url) {
                 await new Promise(r => setTimeout(r, 3000));
             }
         }
+        // Auto SPA detection: if the page body is a JS-only skeleton, use Puppeteer to render it
+        function isSpaShell(html) {
+            const lower = html.toLowerCase();
+            const hasSkeletonLoader = lower.includes('skeleton') || lower.includes('loader-wrapper') || lower.includes('data-loader');
+            const hasRealContent = lower.includes('<input') || lower.includes('<form') || lower.includes('<article') || lower.includes('<p>') || lower.includes('<p ');
+            if (hasSkeletonLoader && !hasRealContent) return true;
+            const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+            if (bodyMatch) {
+                const bodyText = bodyMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (bodyText.length < 200) return true;
+            }
+            return false;
+        }
+
+        if (isSpaShell(html)) {
+            diagnosticReport.otherIssues.push('[SPA_SHELL] JS-only SPA detected. Attempting Puppeteer render...');
+            contentBox.setContent(`{center}{yellow-fg}[SPA] JS-only SPA detected. Booting Puppeteer to render JS...{/yellow-fg}{/center}`);
+            screen.render();
+            try {
+                const puppeteer = getPuppeteer();
+                const pBrowser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+                const pPage = await pBrowser.newPage();
+                await pPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                await pPage.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+                await new Promise(r => setTimeout(r, 4000));
+
+                // Aggressively attempt to click "Accept Cookies" banners and delete them from DOM
+                await pPage.evaluate(() => {
+                    const btn = Array.from(document.querySelectorAll('button, a, div')).find(el => {
+                        const t = (el.textContent || '').toLowerCase();
+                        return (t.includes('accept') || t.includes('akzeptieren') || t.includes('agree') || t.includes('zustimmen') || t.includes('allow all')) &&
+                            (t.includes('cookie') || el.className.toLowerCase().includes('cookie') || el.id.toLowerCase().includes('cookie'));
+                    });
+                    if (btn) btn.click();
+
+                    // Hard remove common banner containers
+                    document.querySelectorAll('div, section').forEach(el => {
+                        const id = (el.id || '').toLowerCase();
+                        const cls = (el.className || '').toLowerCase();
+                        if (id.includes('cookie') || cls.includes('cookie') || id.includes('consent') || cls.includes('consent') || id.includes('onetrust') || cls.includes('onetrust') || id.includes('sp_message')) {
+                            el.remove();
+                        }
+                    });
+                });
+                await new Promise(r => setTimeout(r, 1500));
+
+                html = await pPage.content();
+                await pBrowser.close();
+                contentBox.setContent(`{center}{green-fg}[SPA] Puppeteer JS render complete.{/green-fg}{/center}`);
+                screen.render();
+            } catch (e) {
+                contentBox.setContent(`{center}{red-fg}[SPA ERROR] Puppeteer not installed. Run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth{/red-fg}{/center}`);
+                screen.render();
+                diagnosticReport.otherIssues.push('[SPA_SHELL] Puppeteer unavailable: ' + e.message);
+                await new Promise(r => setTimeout(r, 4000));
+            }
+        }
+
+        // Attempt Fallback if blocked
         if (isCookieWall(html)) {
             diagnosticReport.cookiewallBypassed = true;
             contentBox.setContent(`{center}{yellow-fg}COOKIE WALL DETECTED. ATTEMPTING BYPASS...{/yellow-fg}{/center}`);
@@ -356,22 +486,33 @@ async function fetchAndRender(url) {
         const window = doc.window;
         const document = window.document;
 
-        // Apply Reader Mode logic always for TUI
-        const reader = new Readability(document);
-        const article = reader.parse();
-
         let workingDocument = document;
-        if (article && article.content) {
-            const cleanDOMPurify = DOMPurify(window);
-            const safeHtml = cleanDOMPurify.sanitize(article.content);
-            const cleanDoc = new JSDOM(`<html><body><h1>${article.title || ''}</h1>${safeHtml}</body></html>`, { url: targetUrl, virtualConsole });
-            workingDocument = cleanDoc.window.document;
+
+        // Apply Reader Mode logic only if requested
+        if (readerMode) {
+            const reader = new Readability(document);
+            const article = reader.parse();
+
+            if (article && article.content) {
+                const cleanDOMPurify = DOMPurify(window);
+                const safeHtml = cleanDOMPurify.sanitize(article.content);
+                const cleanDoc = new JSDOM(`<html><body><h1>${article.title || ''}</h1>${safeHtml}</body></html>`, { url: targetUrl, virtualConsole });
+                workingDocument = cleanDoc.window.document;
+            }
         }
 
         const result = [];
         let idCounter = 0;
 
         function isHidden(el) {
+            const tagName = (el.tagName || '').toLowerCase();
+            // ALWAYS preserve essential form elements, even if parent is display:none
+            if (['input', 'select', 'textarea', 'button'].includes(tagName)) return false;
+            // Also preserve containers that hold these elements
+            try {
+                if (el.querySelector && el.querySelector('input:not([type="hidden"]), select, textarea, button')) return false;
+            } catch (e) { }
+
             const idStr = String(el.id || '').toLowerCase();
             const classStr = typeof el.className === 'string' ? el.className.toLowerCase() : '';
 
@@ -397,6 +538,30 @@ async function fetchAndRender(url) {
             } catch (e) {
                 return false;
             }
+        }
+
+        function resolveLabelForInput(el) {
+            let labelText = '';
+            if (el.id) {
+                const explicitLabel = workingDocument.querySelector(`label[for="${el.id}"]`);
+                if (explicitLabel) {
+                    labelText = cleanText(explicitLabel.textContent);
+                    if (labelText) return labelText;
+                }
+            }
+            let parent = el.parentElement;
+            while (parent && parent.tagName !== 'BODY' && parent.tagName !== 'FORM') {
+                if (parent.tagName.toLowerCase() === 'label') {
+                    const clone = parent.cloneNode(true);
+                    const inputs = clone.querySelectorAll('input, select, textarea');
+                    inputs.forEach(i => i.remove());
+                    labelText = cleanText(clone.textContent);
+                    if (labelText) return labelText;
+                }
+                parent = parent.parentElement;
+            }
+            if (el.getAttribute('aria-label')) return cleanText(el.getAttribute('aria-label'));
+            return el.placeholder ? '(Placeholder: ' + cleanText(el.placeholder) + ')' : '';
         }
 
         function cleanText(text) {
@@ -438,6 +603,26 @@ async function fetchAndRender(url) {
                 if (tagName === 'button' || (tagName === 'input' && el.type === 'button') || (tagName === 'input' && el.type === 'submit')) {
                     const text = cleanText(el.textContent) || el.value || 'Submit';
                     result.push({ type: 'button', text: text });
+                    return;
+                }
+
+                if (tagName === 'form') {
+                    const inputs = el.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea');
+                    if (inputs.length > 0) {
+                        result.push({ type: 'text', text: `\n--- [FORM START] ---` });
+                        inputs.forEach(input => {
+                            const lbl = resolveLabelForInput(input);
+                            const name = input.name || input.id || 'unnamed_field';
+                            const type = input.tagName.toLowerCase() === 'input' ? input.type : input.tagName.toLowerCase();
+                            result.push({
+                                type: 'input',
+                                label: lbl,
+                                name: name,
+                                inputType: type
+                            });
+                        });
+                        result.push({ type: 'text', text: `--- [FORM END] ---\n` });
+                    }
                     return;
                 }
 
@@ -499,6 +684,7 @@ async function fetchAndRender(url) {
         screen.render();
 
     } catch (err) {
+        require('fs').writeFileSync('errors.txt', err.stack || err.message);
         contentBox.setContent(`{red-fg}{bold}ERROR: ${err.message}{/bold}{/red-fg}`);
         screen.render();
     }

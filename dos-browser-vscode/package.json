@@ -37,12 +37,17 @@
           ],
           "default": "",
           "description": "Bypass method for Cloudflare/CAPTCHA walls. -> 'browser' opens your system browser | 'stealth' launches an invisible Chrome instance | 'api' uses 2Captcha."
+        },
+        "dosBrowser.generateReports": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, automatically generate an extraction diagnostic report for every page visit and save it to the Reports/ folder in your workspace."
         }
       }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "tsc -p ./",
     "compile": "tsc -w -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",

@@ -21,8 +21,31 @@ export function activate(context: vscode.ExtensionContext) {
                 switch (message.command) {
                     case 'fetchUrl':
                         try {
-                            const result = await fetchAndParse(message.url, message.readerMode);
-                            panel.webview.postMessage({ command: 'render', data: result });
+                            const result = await fetchAndParse(message.url, message.readerMode, false);
+                            panel.webview.postMessage({ command: 'render', data: result.nodes });
+                        } catch (err: any) {
+                            panel.webview.postMessage({ command: 'error', error: err.message });
+                        }
+                        return;
+                    case 'fetchReport':
+                        try {
+                            const result = await fetchAndParse(message.url, message.readerMode, true);
+                            // Save report file to workspace
+                            const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
+                            const reportsDir = path.join(workspacePath, 'Reports');
+                            if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+                            try {
+                                const urlObj = new URL(message.url.startsWith('http') ? message.url : `https://${message.url}`);
+                                const domain = urlObj.hostname.replace(/[^a-z0-9]/gi, '_');
+                                const reportFileName = `report-${domain}-${Date.now()}.json`;
+                                const reportPath = path.join(reportsDir, reportFileName);
+                                fs.writeFileSync(reportPath, JSON.stringify(result.report, null, 2));
+                                vscode.window.showInformationMessage(`[DOS Browser] Report saved to Reports/${reportFileName}`);
+                            } catch (e: any) {
+                                vscode.window.showErrorMessage(`[DOS Browser] Failed to save report: ${e.message}`);
+                            }
+                            // Send report back to webview for display
+                            panel.webview.postMessage({ command: 'reportReady', report: result.report });
                         } catch (err: any) {
                             panel.webview.postMessage({ command: 'error', error: err.message });
                         }
@@ -46,7 +69,36 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(disposable);
 }
 
-async function fetchAndParse(url: string, readerMode: boolean) {
+async function fetchAndParse(url: string, readerMode: boolean, reportMode: boolean = false) {
+    // Load global config
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
+    let globalConfig: any = {};
+    const configPaths = [
+        path.join(workspaceRoot, 'config.json'),
+        path.join(__dirname, '..', '..', 'config.json') // also check root browser dir
+    ];
+    for (const cp of configPaths) {
+        if (fs.existsSync(cp)) {
+            try { globalConfig = JSON.parse(fs.readFileSync(cp, 'utf8')); break; } catch (e) { }
+        }
+    }
+
+    const captchaMode = vscode.workspace.getConfiguration('dosBrowser').get<string>('captchaMode', '') || globalConfig.captchaMode || '';
+    const generateReports = (vscode.workspace.getConfiguration('dosBrowser').get<boolean>('generateReports', false) || globalConfig.generateReports || false);
+    const effectiveReportMode = reportMode || generateReports;
+
+    let diagnosticReport: any = {
+        url: url,
+        timestamp: new Date().toISOString(),
+        cookiewallBypassed: false,
+        captchaIntervened: false,
+        captchaSolverUsed: null,
+        promptInjectionsStripped: 0,
+        adsBlocked: 0,
+        obstructiveCssNodes: 0,
+        otherIssues: []
+    };
+
     let targetUrl = url;
 
     function getCookiesForUrl(u: string) {
@@ -83,18 +135,37 @@ async function fetchAndParse(url: string, readerMode: boolean) {
 
     let html = await response.text();
 
-    const captchaMode = vscode.workspace.getConfiguration('dosBrowser').get<string>('captchaMode', '');
 
     function needsCaptcha(html: string, status: number) {
-        if (status === 403 || status === 503) return true;
+        if (status === 403 || status === 503) {
+            diagnosticReport.captchaIntervened = true;
+            return true;
+        }
         const lower = html.toLowerCase();
-        return lower.includes('cf-browser-verification') ||
+        const hasCaptcha = lower.includes('cf-browser-verification') ||
             lower.includes('just a moment...') ||
             lower.includes('enable javascript and cookies to continue') ||
             lower.includes('cf-turnstile');
+        if (hasCaptcha) diagnosticReport.captchaIntervened = true;
+        return hasCaptcha;
+    }
+
+    function getPuppeteer(): any {
+        let p: any;
+        try {
+            require.resolve('puppeteer-extra');
+        } catch (e) {
+            vscode.window.showInformationMessage('[DOS Browser] Puppeteer missing. Downloading dynamically... This may take a minute.');
+            require('child_process').execSync('npm install --no-save puppeteer puppeteer-extra puppeteer-extra-plugin-stealth', { stdio: 'ignore', cwd: __dirname });
+        }
+        p = require('puppeteer-extra');
+        const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+        p.use(StealthPlugin());
+        return p;
     }
 
     if (needsCaptcha(html, response.status)) {
+        diagnosticReport.captchaSolverUsed = captchaMode || 'none';
         if (captchaMode === 'browser') {
             const open = require('open');
             await open(targetUrl);
@@ -111,9 +182,7 @@ async function fetchAndParse(url: string, readerMode: boolean) {
             html = await response.text();
         } else if (captchaMode === 'stealth') {
             try {
-                const puppeteer = require('puppeteer-extra');
-                const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-                puppeteer.use(StealthPlugin());
+                const puppeteer = getPuppeteer();
                 const browser = await puppeteer.launch({ headless: 'new' });
                 const page = await browser.newPage();
                 await page.goto(targetUrl, { waitUntil: 'networkidle2' });
@@ -131,6 +200,7 @@ async function fetchAndParse(url: string, readerMode: boolean) {
     }
 
     if (isCookieWall(html)) {
+        diagnosticReport.cookiewallBypassed = true;
         response = await fetch(targetUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
@@ -204,13 +274,18 @@ async function fetchAndParse(url: string, readerMode: boolean) {
 
         // Ad Blocker Filter
         if (idStr.includes('ad-') || classStr.includes('ad-') || idStr.includes('advert') || classStr.includes('advert') || idStr.includes('banner') || classStr.includes('banner') || idStr.includes('sponsor') || classStr.includes('sponsor') || classStr.includes('outbrain') || classStr.includes('taboola') || classStr.includes('adsense')) {
+            diagnosticReport.adsBlocked++;
             return true;
         }
 
         if (!workingDocument.defaultView) return false;
         try {
             const style = workingDocument.defaultView.getComputedStyle(el);
-            return (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0');
+            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || parseInt(style.zIndex || '0', 10) < 0) {
+                diagnosticReport.obstructiveCssNodes++;
+                return true;
+            }
+            return false;
         } catch (e) {
             return false;
         }
@@ -222,6 +297,7 @@ async function fetchAndParse(url: string, readerMode: boolean) {
 
         const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
         if (promptRegex.test(cleaned)) {
+            diagnosticReport.promptInjectionsStripped++;
             try {
                 const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
                 const csvPath = path.join(workspacePath, 'promt_injections.csv');
@@ -313,7 +389,7 @@ async function fetchAndParse(url: string, readerMode: boolean) {
     }
 
     walkDOM(workingDocument.body);
-    return result;
+    return { nodes: result, report: effectiveReportMode ? diagnosticReport : null };
 }
 
 async function startExtensionDownload(url: string, destPath: string, downloadId: string, panel: vscode.WebviewPanel, filename: string) {
@@ -489,12 +565,38 @@ function getWebviewContent() {
         .theme-white .node-button { background: #1f2937; color: #e5e7eb; border-color: #6b7280; }
         .theme-white .node-image { border-color: #6b7280; }
         .theme-white .node-image-meta { color: #9ca3af; }
+        .report-btn {
+            background: black;
+            color: #eab308;
+            border: 1px solid #ca8a04;
+            font-size: 12px;
+            padding: 4px 8px;
+        }
+        .report-btn:hover:not(:disabled) { background: #eab308; color: black; }
+        .report-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        #report-panel {
+            position: fixed; top: 0; right: 0; width: 420px; height: 100vh;
+            background: #111; border-left: 2px solid #eab308;
+            color: #facc15; font-family: monospace; font-size: 12px;
+            overflow-y: auto; padding: 20px; z-index: 100;
+            box-shadow: -4px 0 20px rgba(234,179,8,0.2);
+            display: none;
+        }
+        #report-panel h2 { color: #fbbf24; margin-top: 0; font-size: 14px; letter-spacing: 2px; }
+        .report-row { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding: 6px 0; }
+        .report-key { color: #9ca3af; }
+        .report-val-true { color: #f87171; }
+        .report-val-false { color: #4ade80; }
+        .report-val-num { color: #60a5fa; }
+        .report-val-str { color: #fbbf24; }
+        #report-close { float: right; background: none; border: 1px solid #6b7280; color: #9ca3af; font-size: 11px; padding: 2px 8px; cursor: pointer; }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="toggles">
             <button class="toggle-btn" id="readerToggle">READER: OFF</button>
+            <button class="report-btn" id="reportBtn" disabled title="Generate extraction diagnostic report">[ REPORT ]</button>
             <button class="toggle-btn" id="themeToggle">THEME: GREEN</button>
         </div>
         <div class="title">VS CODE DOS BROWSER</div>
@@ -521,6 +623,12 @@ function getWebviewContent() {
         </div>
     </div>
 
+    <div id="report-panel">
+        <button id="report-close" onclick="document.getElementById('report-panel').style.display='none'">CLOSE ✕</button>
+        <h2>⚙ EXTRACTION DIAGNOSTIC REPORT</h2>
+        <div id="report-content"></div>
+    </div>
+
     <script>
         const vscode = acquireVsCodeApi();
         
@@ -536,8 +644,11 @@ function getWebviewContent() {
         const forwardBtn = document.getElementById('forwardBtn');
         const readerToggle = document.getElementById('readerToggle');
         const themeToggle = document.getElementById('themeToggle');
+        const reportBtn = document.getElementById('reportBtn');
         const contentDiv = document.getElementById('content');
         const errorDiv = document.getElementById('error');
+        const reportPanel = document.getElementById('report-panel');
+        const reportContent = document.getElementById('report-content');
         
         function updateNavButtons() {
             backBtn.disabled = historyIndex <= 0;
@@ -562,6 +673,14 @@ function getWebviewContent() {
             readerMode = !readerMode;
             readerToggle.textContent = \`READER: \${readerMode ? 'ON' : 'OFF'}\`;
         });
+
+        reportBtn.addEventListener('click', () => {
+            const current = urlInput.value.trim();
+            if (!current) return;
+            reportBtn.textContent = 'REPORTING...';
+            reportBtn.disabled = true;
+            vscode.postMessage({ command: 'fetchReport', url: current, readerMode: readerMode });
+        });
         
         themeToggle.addEventListener('click', () => {
             theme = theme === 'green' ? 'white' : 'green';
@@ -572,6 +691,7 @@ function getWebviewContent() {
         function navigate(url, isHistoryNav = false) {
             contentDiv.innerHTML = '<div style="text-align: center; margin-top: 80px;">LOADING...</div>';
             errorDiv.style.display = 'none';
+            reportBtn.disabled = false;
             
             let targetUrl = url;
             if (!targetUrl.startsWith('http')) {
@@ -609,6 +729,13 @@ function getWebviewContent() {
                     errorDiv.textContent = 'ERROR: ' + message.error;
                     errorDiv.style.display = 'block';
                     contentDiv.innerHTML = '';
+                    reportBtn.textContent = '[ REPORT ]';
+                    reportBtn.disabled = false;
+                    break;
+                case 'reportReady':
+                    reportBtn.textContent = '[ REPORT ]';
+                    reportBtn.disabled = false;
+                    showReport(message.report);
                     break;
                 case 'downloadInit':
                     activeDownloads[message.id] = { filename: message.filename, progress: 0, status: 'downloading' };
@@ -669,6 +796,29 @@ function getWebviewContent() {
         function queueDownload(url, text) {
             const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
             vscode.postMessage({ command: 'download', url: url, filename: text || 'file', id: id });
+        }
+
+        function showReport(report) {
+            if (!report) return;
+            const rows = [
+                ['URL', report.url],
+                ['Timestamp', report.timestamp],
+                ['Cookie Wall Bypassed', report.cookiewallBypassed],
+                ['CAPTCHA Intervened', report.captchaIntervened],
+                ['CAPTCHA Solver Used', report.captchaSolverUsed || 'N/A'],
+                ['Prompt Injections Stripped', report.promptInjectionsStripped],
+                ['Ads / Trackers Blocked', report.adsBlocked],
+                ['Obstructive CSS Nodes', report.obstructiveCssNodes],
+                ['Other Issues', (report.otherIssues || []).join(', ') || 'None']
+            ];
+            reportContent.innerHTML = rows.map(([k, v]) => {
+                let cls = 'report-val-str';
+                if (v === true) cls = 'report-val-true';
+                else if (v === false) cls = 'report-val-false';
+                else if (typeof v === 'number') cls = 'report-val-num';
+                return \`<div class="report-row"><span class="report-key">\${k}</span><span class="\${cls}">\${v}</span></div>\`;
+            }).join('');
+            reportPanel.style.display = 'block';
         }
 
         function renderNodes(nodes) {

@@ -15,6 +15,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const url = searchParams.get('url');
     const readerMode = searchParams.get('readerMode') === 'true';
+    const jsRender = searchParams.get('jsRender') === 'true' || config.jsRender;
     const debugMode = searchParams.get('debug') === 'true' || config.debugLogging;
     const captchaMode = searchParams.get('captcha') || config.captchaMode;
     const reportMode = searchParams.get('report') === 'true' || config.generateReports;
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
         let targetUrl = url;
 
         function getCookiesForUrl(u: string) {
-            let cookies = 'CONSENT=YES+cb; CookieConsent={stamp:\'%2B\',necessary:true,preferences:true,statistics:true,marketing:true,method:\'explicit\',ver:1,utc:1610000000000}; accept_cookies=true; cookie_notice_accepted=true;';
+            let cookies = 'cookieyes-consent=consent:yes; CONSENT=YES+cb; CookieConsent={stamp:\'%2B\',necessary:true,preferences:true,statistics:true,marketing:true,method:\'explicit\',ver:1,utc:1610000000000}; accept_cookies=true; cookie_notice_accepted=true;';
             if (u.includes('golem.de')) cookies += ' golem_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
             if (u.includes('spiegel.de')) cookies += ' spiegel_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
             if (u.includes('zeit.de')) cookies += ' zeit_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
             const lower = html.toLowerCase();
             return lower.includes('id="sp_message_container"') ||
                 lower.includes('id="onetrust-consent-sdk"') ||
+                lower.includes('id="cookieyes-banner"') ||
                 lower.includes('class="sp_message_container"') ||
                 lower.includes('consent.cmp') ||
                 lower.includes('id="gspmessage"') ||
@@ -56,20 +58,94 @@ export async function GET(request: Request) {
                 (lower.includes('zustimmung') && lower.includes('datenschutz') && lower.includes('akzeptieren'));
         }
 
-        let response = await fetch(targetUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Cookie': getCookiesForUrl(targetUrl)
+        function getPuppeteer(): any {
+            let p: any;
+            try {
+                require.resolve('puppeteer-extra');
+            } catch (e) {
+                require('child_process').execSync('npm install --no-save puppeteer puppeteer-extra puppeteer-extra-plugin-stealth', { stdio: 'ignore', cwd: process.cwd() });
             }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+            p = require('puppeteer-extra');
+            const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+            p.use(StealthPlugin());
+            return p;
         }
 
-        let html = await response.text();
+        function isSpaShell(html: string) {
+            // Detect if the page is a JS-only SPA shell (body nearly empty, skeleton loaders present, no real content)
+            const lower = html.toLowerCase();
+            // Quick win: has skeleton loaders but NO form, input, article, or meaningful paragraph text
+            const hasSkeletonLoader = lower.includes('skeleton') || lower.includes('loader-wrapper') || lower.includes('data-loader');
+            const hasRealContent = lower.includes('<input') || lower.includes('<form') || lower.includes('<article') || lower.includes('<p>') || lower.includes('<p ');
+            if (hasSkeletonLoader && !hasRealContent) return true;
+            // Generic check: body has very little text content (< 200 visible chars)
+            const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+            if (bodyMatch) {
+                const bodyText = bodyMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (bodyText.length < 200) return true;
+            }
+            return false;
+        }
+
+        let html = '';
+        let contentType = '';
+
+        if (jsRender) {
+            diagnosticReport.otherIssues.push('[JS_RENDER] Using forced Puppeteer engine via API.');
+            try {
+                const puppeteer = getPuppeteer();
+                const pBrowser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+                const pPage = await pBrowser.newPage();
+                await pPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                await pPage.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+                await new Promise((r) => setTimeout(r, 4000));
+
+                // Aggressively attempt to click "Accept Cookies" banners
+                await pPage.evaluate(() => {
+                    const btn = Array.from(document.querySelectorAll('button, a, div')).find(el => {
+                        const t = (el.textContent || '').toLowerCase();
+                        return (t.includes('accept') || t.includes('akzeptieren') || t.includes('agree') || t.includes('zustimmen') || t.includes('allow all')) &&
+                            (t.includes('cookie') || el.className.toLowerCase().includes('cookie') || el.id.toLowerCase().includes('cookie'));
+                    });
+                    if (btn) (btn as HTMLElement).click();
+
+                    // Hard remove common banner containers
+                    document.querySelectorAll('div, section').forEach(el => {
+                        const id = (el.id || '').toLowerCase();
+                        const cls = (el.className || '').toLowerCase();
+                        if (id.includes('cookie') || cls.includes('cookie') || id.includes('consent') || cls.includes('consent') || id.includes('onetrust') || cls.includes('onetrust') || id.includes('sp_message')) {
+                            el.remove();
+                        }
+                    });
+                });
+                await new Promise((r) => setTimeout(r, 1500));
+
+                html = await pPage.content();
+                await pBrowser.close();
+            } catch (e: any) {
+                return NextResponse.json({ error: `Puppeteer failed to boot JS render: ${e.message}` }, { status: 500 });
+            }
+        } else {
+            let response = await fetch(targetUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Cookie': getCookiesForUrl(targetUrl)
+                }
+            });
+
+            if (!response.ok) {
+                return NextResponse.json({ error: `Failed to fetch URL: ${response.status} ${response.statusText}` }, { status: response.status });
+            }
+
+            contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml') && !contentType.includes('application/xml')) {
+                return await handleFileDownload(targetUrl, response);
+            }
+
+            html = await response.text();
+        }
 
         function needsCaptcha(html: string, status: number) {
             if (status === 403 || status === 503) {
@@ -107,9 +183,7 @@ export async function GET(request: Request) {
             } else if (captchaMode === 'stealth') {
                 console.error(`[CAPTCHA] Booting Puppeteer stealth...`);
                 try {
-                    const puppeteer = require('puppeteer-extra');
-                    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-                    puppeteer.use(StealthPlugin());
+                    const puppeteer = getPuppeteer();
                     const browser = await puppeteer.launch({ headless: 'new' });
                     const page = await browser.newPage();
                     await page.goto(targetUrl, { waitUntil: 'networkidle2' });
@@ -123,6 +197,37 @@ export async function GET(request: Request) {
                 console.error('[CAPTCHA ERROR] 2Captcha API pending implementation...');
             } else {
                 console.error(`[CAPTCHA DETECTED] No solver specified in Next.js request param!`);
+            }
+        }
+
+        // Auto SPA detection: if the page body is a JS-only skeleton, use Puppeteer to render it
+        if (isSpaShell(html)) {
+            diagnosticReport.otherIssues.push('[SPA_SHELL] JavaScript-only SPA detected. Attempting Puppeteer JS render...');
+            try {
+                const puppeteer = getPuppeteer();
+                const pBrowser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+                const pPage = await pBrowser.newPage();
+                await pPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                await pPage.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+                // Extra wait for JS frameworks to finish rendering
+                await new Promise(r => setTimeout(r, 4000));
+
+                // Aggressively attempt to click "Accept Cookies" banners
+                await pPage.evaluate(() => {
+                    const btn = Array.from(document.querySelectorAll('button, a, div')).find(el => {
+                        const t = (el.textContent || '').toLowerCase();
+                        return (t.includes('accept') || t.includes('akzeptieren') || t.includes('agree') || t.includes('zustimmen') || t.includes('allow all')) &&
+                            (t.includes('cookie') || el.className.toLowerCase().includes('cookie') || el.id.toLowerCase().includes('cookie'));
+                    }) as HTMLElement;
+                    if (btn) btn.click();
+                });
+                await new Promise(r => setTimeout(r, 1500)); // wait for banner animation to finish
+
+                html = await pPage.content();
+                await pBrowser.close();
+                diagnosticReport.otherIssues.push('[SPA_SHELL] Puppeteer JS render completed successfully.');
+            } catch (e: any) {
+                diagnosticReport.otherIssues.push(`[SPA_SHELL] Puppeteer not available: ${e.message}. Install with: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth`);
             }
         }
 
@@ -190,6 +295,14 @@ export async function GET(request: Request) {
         let idCounter = 0;
 
         function isHidden(el: any) {
+            const tagName = (el.tagName || '').toLowerCase();
+            // ALWAYS preserve essential form elements, even if parent is display:none
+            if (['input', 'select', 'textarea', 'button'].includes(tagName)) return false;
+            // Also preserve containers that hold these elements
+            try {
+                if (el.querySelector && el.querySelector('input:not([type="hidden"]), select, textarea, button')) return false;
+            } catch (e) { }
+
             const idStr = String(el.id || '').toLowerCase();
             const classStr = typeof el.className === 'string' ? el.className.toLowerCase() : '';
 

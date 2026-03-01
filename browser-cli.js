@@ -18,6 +18,21 @@ async function main() {
     let debugMode = config.debugLogging || false;
     let captchaMode = config.captchaMode || null;
     let reportMode = config.generateReports || false;
+    let jsRender = config.jsRender || false;
+
+    function getPuppeteer() {
+        let p;
+        try {
+            require.resolve('puppeteer-extra');
+        } catch (e) {
+            console.error('[DEPENDENCY] Puppeteer not found. Downloading dynamically... This may take a minute.');
+            require('child_process').execSync('npm install --no-save puppeteer puppeteer-extra puppeteer-extra-plugin-stealth', { stdio: 'inherit', cwd: process.cwd() });
+        }
+        p = require('puppeteer-extra');
+        const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+        p.use(StealthPlugin());
+        return p;
+    }
 
     let diagnosticReport = {
         url: '',
@@ -36,6 +51,8 @@ async function main() {
             readerMode = true;
         } else if (arg === '--report') {
             reportMode = true;
+        } else if (arg === '--js') {
+            jsRender = true;
         } else if (arg === '--debug') {
             debugMode = true;
         } else if (arg.startsWith('--captcha=')) {
@@ -44,7 +61,7 @@ async function main() {
             url = arg;
         } else {
             console.log(`Unknown argument: ${arg}`);
-            console.log('Usage: node browser-cli.js <url> [--reader] [--debug] [--report] [--captcha=browser|stealth|api]');
+            console.log('Usage: node browser-cli.js <url> [--reader] [--js] [--debug] [--report] [--captcha=browser|stealth|api]');
             process.exit(1);
         }
     }
@@ -59,7 +76,7 @@ async function main() {
         let targetUrl = url;
 
         function getCookiesForUrl(u) {
-            let cookies = 'CONSENT=YES+cb; CookieConsent={stamp:\'%2B\',necessary:true,preferences:true,statistics:true,marketing:true,method:\'explicit\',ver:1,utc:1610000000000}; accept_cookies=true; cookie_notice_accepted=true;';
+            let cookies = 'cookieyes-consent=consent:yes; CONSENT=YES+cb; CookieConsent={stamp:\'%2B\',necessary:true,preferences:true,statistics:true,marketing:true,method:\'explicit\',ver:1,utc:1610000000000}; accept_cookies=true; cookie_notice_accepted=true;';
             if (u.includes('golem.de')) cookies += ' golem_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
             if (u.includes('spiegel.de')) cookies += ' spiegel_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
             if (u.includes('zeit.de')) cookies += ' zeit_consent=true; iab_cmp_consent=true; euconsent-v2=true;';
@@ -70,6 +87,7 @@ async function main() {
             const lower = html.toLowerCase();
             return lower.includes('id="sp_message_container"') ||
                 lower.includes('id="onetrust-consent-sdk"') ||
+                lower.includes('id="cookieyes-banner"') ||
                 lower.includes('class="sp_message_container"') ||
                 lower.includes('consent.cmp') ||
                 lower.includes('id="gspmessage"') ||
@@ -79,87 +97,174 @@ async function main() {
 
         console.error(`Fetching ${targetUrl}...`);
         diagnosticReport.url = targetUrl;
-        let response = await fetch(targetUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Cookie': getCookiesForUrl(targetUrl)
-            }
-        });
+        let html = '';
+        let responseOpt = null;
 
-        if (!response.ok) {
-            throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
-        }
+        if (jsRender) {
+            console.error(`[JS_RENDER] Forced JS rendering mode active. Booting Puppeteer...`);
+            diagnosticReport.otherIssues.push('[JS_RENDER] Using forced Puppeteer engine.');
+            try {
+                const puppeteer = getPuppeteer();
+                const pBrowser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+                const pPage = await pBrowser.newPage();
+                await pPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                await pPage.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+                await new Promise(r => setTimeout(r, 4000));
 
-        let html = await response.text();
+                // Aggressively attempt to click "Accept Cookies" banners
+                await pPage.evaluate(() => {
+                    const btn = Array.from(document.querySelectorAll('button, a, div')).find(el => {
+                        const t = (el.textContent || '').toLowerCase();
+                        return (t.includes('accept') || t.includes('akzeptieren') || t.includes('agree') || t.includes('zustimmen') || t.includes('allow all')) &&
+                            (t.includes('cookie') || el.className.toLowerCase().includes('cookie') || el.id.toLowerCase().includes('cookie'));
+                    });
+                    if (btn) btn.click();
 
-        function needsCaptcha(html, status) {
-            if (status === 403 || status === 503) {
-                diagnosticReport.captchaIntervened = true;
-                return true;
-            }
-            const lower = html.toLowerCase();
-            const hasCaptcha = lower.includes('cf-browser-verification') ||
-                lower.includes('just a moment...') ||
-                lower.includes('enable javascript and cookies to continue') ||
-                lower.includes('cf-turnstile');
-            if (hasCaptcha) diagnosticReport.captchaIntervened = true;
-            return hasCaptcha;
-        }
-
-        if (needsCaptcha(html, response.status)) {
-            diagnosticReport.captchaSolverUsed = captchaMode || 'none';
-            if (captchaMode === 'browser') {
-                console.error(`[CAPTCHA] Bot protection detected. Opening ${targetUrl} in system browser...`);
-                const open = require('open');
-                await open(targetUrl);
-                console.error('[CAPTCHA] Please solve the CAPTCHA in your web browser. Press ENTER when done...');
-                await new Promise(resolve => {
-                    const readline = require('readline').createInterface({ input: process.stdin, output: process.stdout });
-                    readline.question('', () => {
-                        readline.close();
-                        resolve();
+                    // Hard remove common banner containers
+                    document.querySelectorAll('div, section').forEach(el => {
+                        const id = (el.id || '').toLowerCase();
+                        const cls = (el.className || '').toLowerCase();
+                        if (id.includes('cookie') || cls.includes('cookie') || id.includes('consent') || cls.includes('consent') || id.includes('onetrust') || cls.includes('onetrust') || id.includes('sp_message')) {
+                            el.remove();
+                        }
                     });
                 });
-                console.error('[CAPTCHA] Retrying fetch...');
-                response = await fetch(targetUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Cookie': getCookiesForUrl(targetUrl)
-                    }
-                });
-                html = await response.text();
-            } else if (captchaMode === 'stealth') {
-                console.error(`[CAPTCHA] Bot protection detected. Booting Puppeteer stealth browser...`);
-                try {
-                    const puppeteer = require('puppeteer-extra');
-                    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-                    puppeteer.use(StealthPlugin());
-                    const browser = await puppeteer.launch({ headless: 'new' });
-                    const page = await browser.newPage();
-                    await page.goto(targetUrl, { waitUntil: 'networkidle2' });
-                    await new Promise(r => setTimeout(r, 6000)); // Wait for Cloudflare
-                    html = await page.content();
-                    await browser.close();
-                } catch (e) {
-                    if (e.code === 'MODULE_NOT_FOUND') {
-                        console.error('[CAPTCHA ERROR] Puppeteer is not installed. Please run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth');
-                    } else {
-                        console.error('[CAPTCHA ERROR] Stealth bypass failed:', e.message);
-                    }
+                await new Promise(r => setTimeout(r, 1500));
+
+                html = await pPage.content();
+                await pBrowser.close();
+                console.error('[JS_RENDER] Puppeteer extraction complete.');
+            } catch (e) {
+                console.error('[JS_RENDER ERROR] Puppeteer not installed: ' + e.message);
+                process.exit(1);
+            }
+        } else {
+            let response = await fetch(targetUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Cookie': getCookiesForUrl(targetUrl)
                 }
-            } else if (captchaMode === 'api') {
-                console.error(`[CAPTCHA] Bot protection detected. Sending to 2Captcha API...`);
-                const apiKey = process.env.TWOCAPTCHA_API_KEY;
-                if (!apiKey) {
-                    console.error('[CAPTCHA ERROR] TWOCAPTCHA_API_KEY environment variable is missing.');
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+            }
+
+            html = await response.text();
+
+            function needsCaptcha(html, status) {
+                if (status === 403 || status === 503) {
+                    diagnosticReport.captchaIntervened = true;
+                    return true;
+                }
+                const lower = html.toLowerCase();
+                const hasCaptcha = lower.includes('cf-browser-verification') ||
+                    lower.includes('just a moment...') ||
+                    lower.includes('enable javascript and cookies to continue') ||
+                    lower.includes('cf-turnstile');
+                if (hasCaptcha) diagnosticReport.captchaIntervened = true;
+                return hasCaptcha;
+            }
+
+            if (needsCaptcha(html, response.status)) {
+                diagnosticReport.captchaSolverUsed = captchaMode || 'none';
+                if (captchaMode === 'browser') {
+                    console.error(`[CAPTCHA] Bot protection detected. Opening ${targetUrl} in system browser...`);
+                    const open = require('open');
+                    await open(targetUrl);
+                    console.error('[CAPTCHA] Please solve the CAPTCHA in your web browser. Press ENTER when done...');
+                    await new Promise(resolve => {
+                        const readline = require('readline').createInterface({ input: process.stdin, output: process.stdout });
+                        readline.question('', () => {
+                            readline.close();
+                            resolve();
+                        });
+                    });
+                    console.error('[CAPTCHA] Retrying fetch...');
+                    response = await fetch(targetUrl, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                            'Cookie': getCookiesForUrl(targetUrl)
+                        }
+                    });
+                    html = await response.text();
+                } else if (captchaMode === 'stealth') {
+                    console.error(`[CAPTCHA] Bot protection detected. Booting Puppeteer stealth browser...`);
+                    try {
+                        const puppeteer = getPuppeteer();
+                        const browser = await puppeteer.launch({ headless: 'new' });
+                        const page = await browser.newPage();
+                        await page.goto(targetUrl, { waitUntil: 'networkidle2' });
+                        await new Promise(r => setTimeout(r, 6000));
+                        html = await page.content();
+                        await browser.close();
+                    } catch (e) {
+                        if (e.code === 'MODULE_NOT_FOUND') {
+                            console.error('[CAPTCHA ERROR] Puppeteer is not installed. Please run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth');
+                        } else {
+                            console.error('[CAPTCHA ERROR] Stealth bypass failed:', e.message);
+                        }
+                    }
+                } else if (captchaMode === 'api') {
+                    console.error(`[CAPTCHA] Bot protection detected. Sending to 2Captcha API...`);
+                    const apiKey = process.env.TWOCAPTCHA_API_KEY;
+                    if (!apiKey) {
+                        console.error('[CAPTCHA ERROR] TWOCAPTCHA_API_KEY environment variable is missing.');
+                    } else {
+                        console.error('[CAPTCHA] 2Captcha Integration pending implementation of sitekey extraction.');
+                    }
                 } else {
-                    console.error('[CAPTCHA] 2Captcha Integration pending implementation of sitekey extraction.');
                 }
             } else {
                 console.error(`[CAPTCHA] Bot protection detected, but no solver was specified! Pass --captcha=browser, --captcha=stealth, or --captcha=api.`);
+            }
+        }
+
+        // Auto SPA detection: if the page body is a JS-only skeleton, use Puppeteer to render it
+        function isSpaShell(html) {
+            const lower = html.toLowerCase();
+            const hasSkeletonLoader = lower.includes('skeleton') || lower.includes('loader-wrapper') || lower.includes('data-loader');
+            const hasRealContent = lower.includes('<input') || lower.includes('<form') || lower.includes('<article') || lower.includes('<p>') || lower.includes('<p ');
+            if (hasSkeletonLoader && !hasRealContent) return true;
+            const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+            if (bodyMatch) {
+                const bodyText = bodyMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (bodyText.length < 200) return true;
+            }
+            return false;
+        }
+
+        if (isSpaShell(html)) {
+            diagnosticReport.otherIssues.push('[SPA_SHELL] JS-only SPA detected. Attempting Puppeteer render...');
+            console.error('[SPA] JavaScript-only SPA detected. Booting Puppeteer to render JS...');
+            try {
+                const puppeteer = getPuppeteer();
+                const pBrowser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+                const pPage = await pBrowser.newPage();
+                await pPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                await pPage.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+                await new Promise(r => setTimeout(r, 4000));
+
+                // Aggressively attempt to click "Accept Cookies" banners
+                await pPage.evaluate(() => {
+                    const btn = Array.from(document.querySelectorAll('button, a, div')).find(el => {
+                        const t = (el.textContent || '').toLowerCase();
+                        return (t.includes('accept') || t.includes('akzeptieren') || t.includes('agree') || t.includes('zustimmen') || t.includes('allow all')) &&
+                            (t.includes('cookie') || el.className.toLowerCase().includes('cookie') || el.id.toLowerCase().includes('cookie'));
+                    });
+                    if (btn) btn.click();
+                });
+                await new Promise(r => setTimeout(r, 1500));
+
+                html = await pPage.content();
+                await pBrowser.close();
+                console.error('[SPA] Puppeteer JS render complete.');
+            } catch (e) {
+                console.error('[SPA] Puppeteer not installed. Run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth');
+                diagnosticReport.otherIssues.push('[SPA_SHELL] Puppeteer unavailable: ' + e.message);
             }
         }
 
@@ -228,8 +333,18 @@ async function main() {
         let idCounter = 0;
 
         function isHidden(el) {
+            const tagName = (el.tagName || '').toLowerCase();
+            // ALWAYS preserve essential form elements, even if parent is display:none
+            if (['input', 'select', 'textarea', 'button'].includes(tagName)) return false;
+            // Also preserve containers that hold these elements
+            try {
+                if (el.querySelector && el.querySelector('input:not([type="hidden"]), select, textarea, button')) return false;
+            } catch (e) { }
+
             const idStr = String(el.id || '').toLowerCase();
             const classStr = typeof el.className === 'string' ? el.className.toLowerCase() : '';
+
+            // Cookie Consent Filter
             if (idStr.includes('cookie') || classStr.includes('cookie') || idStr.includes('consent') || classStr.includes('consent') || idStr.includes('onetrust') || classStr.includes('onetrust')) {
                 return true;
             }
@@ -247,6 +362,37 @@ async function main() {
             }
         }
 
+        function resolveLabelForInput(el) {
+            let labelText = '';
+            // 1. Check for explicit <label for="id">
+            if (el.id) {
+                const explicitLabel = workingDocument.querySelector(`label[for="${el.id}"]`);
+                if (explicitLabel) {
+                    labelText = cleanText(explicitLabel.textContent);
+                    if (labelText) return labelText;
+                }
+            }
+            // 2. Check if wrapped in <label>
+            let parent = el.parentElement;
+            while (parent && parent.tagName !== 'BODY' && parent.tagName !== 'FORM') {
+                if (parent.tagName.toLowerCase() === 'label') {
+                    // Extract text excluding the input's own text/value
+                    const clone = parent.cloneNode(true);
+                    const inputs = clone.querySelectorAll('input, select, textarea');
+                    inputs.forEach(i => i.remove());
+                    labelText = cleanText(clone.textContent);
+                    if (labelText) return labelText;
+                }
+                parent = parent.parentElement;
+            }
+            // 3. Check for aria-label
+            if (el.getAttribute('aria-label')) {
+                return cleanText(el.getAttribute('aria-label'));
+            }
+            // 4. Fallback to placeholder if nothing else
+            return el.placeholder ? '(Placeholder: ' + cleanText(el.placeholder) + ')' : '';
+        }
+
         function cleanText(text) {
             const cleaned = text ? text.replace(/\s+/g, ' ').trim() : '';
             if (!cleaned) return '';
@@ -256,7 +402,7 @@ async function main() {
                 diagnosticReport.promptInjectionsStripped++;
                 try {
                     const csvPath = require('path').join(process.cwd(), 'promt_injections.csv');
-                    const logLine = `"${url}","${cleaned.replace(/"/g, '""')}"\n`;
+                    const logLine = `"${targetUrl}","${cleaned.replace(/"/g, '""')}"\n`;
                     const fs = require('fs');
                     if (!fs.existsSync(csvPath)) fs.writeFileSync(csvPath, 'URL,Injection_Attempt\n');
                     fs.appendFileSync(csvPath, logLine);
@@ -332,7 +478,8 @@ async function main() {
                             type: inputTagName,
                             inputType: inputTagName === 'input' ? input.type : undefined,
                             placeholder: input.placeholder || '',
-                            value: input.value || ''
+                            value: input.value || '',
+                            label: resolveLabelForInput(input)
                         };
 
                         if (inputTagName === 'select') {
