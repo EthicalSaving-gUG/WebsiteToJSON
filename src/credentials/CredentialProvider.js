@@ -63,7 +63,11 @@ export class CredentialProvider {
 const providerRegistry = {
   'manual': null,
   'keepassxc': null,
-  'vaultwarden': null
+  'vaultwarden': null,
+  'browser-import-chrome': null,
+  'browser-import-firefox': null,
+  'browser-import-edge': null,
+  'browser-import-brave': null
 };
 
 export const registerProvider = (type, instance) => {
