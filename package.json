@@ -1,12 +1,52 @@
 {
-  "name": "temp",
+  "name": "dos-browser",
   "version": "0.1.0",
-  "private": true,
+  "description": "Retro-styled web browsing suite for humans and AI agents: semantic DOM extraction to JSON/Markdown, with a TUI, CLI, MCP server, and Next.js web UI.",
+  "keywords": [
+    "browser",
+    "scraper",
+    "web-scraping",
+    "dom",
+    "readability",
+    "mcp",
+    "model-context-protocol",
+    "cli",
+    "tui",
+    "json"
+  ],
+  "homepage": "https://github.com/ethicalsaving-gug/websitetojson#readme",
+  "bugs": {
+    "url": "https://github.com/ethicalsaving-gug/websitetojson/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ethicalsaving-gug/websitetojson.git"
+  },
+  "license": "MIT",
+  "author": "EthicalSaving gUG",
+  "main": "browser-cli.js",
+  "bin": {
+    "dos-browser": "browser-cli.js",
+    "dos-browser-tui": "tui-browser.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "browser-cli.js",
+    "tui-browser.js",
+    "mcp-server.js",
+    "config.json",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --test",
     "clean": "taskkill /F /IM node.exe /T"
   },
   "dependencies": {
