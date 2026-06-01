@@ -1,12 +1,67 @@
 {
-  "name": "temp",
-  "version": "0.1.0",
-  "private": true,
+  "name": "dos-browser",
+  "version": "1.0.0",
+  "description": "A retro-styled, semantic web browsing suite for Humans and AI Agents. Strips DOM noise to clean JSON/Markdown, with a built-in ad blocker, cookie-wall bypass, prompt-injection firewall, TUI, CLI, VS Code extension and MCP server.",
+  "keywords": [
+    "browser",
+    "mcp",
+    "model-context-protocol",
+    "ai-agent",
+    "web-scraping",
+    "html-to-json",
+    "html-to-markdown",
+    "readability",
+    "dom",
+    "tui",
+    "cli",
+    "ad-blocker",
+    "prompt-injection",
+    "llm",
+    "scraper"
+  ],
+  "homepage": "https://github.com/EthicalSaving-gUG/WebsiteToJSON#readme",
+  "bugs": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EthicalSaving-gUG/WebsiteToJSON.git"
+  },
+  "license": "MIT",
+  "author": "EthicalSaving gUG <fabian@ethicalsaving.org>",
+  "main": "browser-cli.js",
+  "bin": {
+    "dos-browser": "browser-cli.js",
+    "dos-browser-tui": "tui-browser.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
+  "files": [
+    "browser-cli.js",
+    "tui-browser.js",
+    "mcp-server.js",
+    "next.config.ts",
+    "tailwind.config.js",
+    "postcss.config.js",
+    "tsconfig.json",
+    "config.json",
+    "src/",
+    "public/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "browse": "node browser-cli.js",
+    "tui": "node tui-browser.js",
+    "mcp": "node mcp-server.js",
     "lint": "eslint",
+    "test": "node test/smoke.test.js",
     "clean": "taskkill /F /IM node.exe /T"
   },
   "dependencies": {
