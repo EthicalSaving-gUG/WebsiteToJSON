@@ -1,12 +1,59 @@
 {
-  "name": "temp",
-  "version": "0.1.0",
-  "private": true,
+  "name": "dos-browser",
+  "version": "1.0.0",
+  "description": "Retro-styled web browsing suite for Humans and AI Agents: semantic DOM extraction to JSON/Markdown, a terminal UI, a CLI, a VS Code extension, and an MCP server with prompt-injection filtering, ad blocking, and cookie-wall bypass.",
+  "keywords": [
+    "browser",
+    "scraper",
+    "web-scraping",
+    "html-to-json",
+    "html-to-markdown",
+    "readability",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "llm",
+    "tui",
+    "terminal",
+    "prompt-injection",
+    "dom-parser"
+  ],
+  "homepage": "https://github.com/EthicalSaving-gUG/WebsiteToJSON#readme",
+  "bugs": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EthicalSaving-gUG/WebsiteToJSON.git"
+  },
+  "license": "MIT",
+  "author": "EthicalSaving gUG",
+  "bin": {
+    "dos-browser": "tui-browser.js",
+    "dos-browser-cli": "browser-cli.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
+  "files": [
+    "tui-browser.js",
+    "browser-cli.js",
+    "mcp-server.js",
+    "config.json",
+    "src/credentials",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node test/smoke.test.js",
+    "browse": "node tui-browser.js",
+    "cli": "node browser-cli.js",
+    "mcp": "node mcp-server.js",
     "clean": "taskkill /F /IM node.exe /T"
   },
   "dependencies": {

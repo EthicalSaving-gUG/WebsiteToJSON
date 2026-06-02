@@ -1,6 +1,33 @@
 # DOS Browser 🌐👾
 
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![license](https://img.shields.io/npm/l/dos-browser.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+---
+
+## 📦 Install
+
+Run any of the interfaces instantly with `npx` (no install required):
+
+```bash
+# Interactive terminal browser
+npx dos-browser https://news.ycombinator.com/
+
+# Headless JSON extractor
+npx dos-browser-cli https://en.wikipedia.org/wiki/Terminal
+
+# MCP server (for AI agents)
+npx dos-browser-mcp
+```
+
+Or install globally to get the `dos-browser`, `dos-browser-cli`, and `dos-browser-mcp` commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+```
 
 ---
 
@@ -57,12 +84,15 @@ Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
 {
   "mcpServers": {
     "dos-browser": {
-      "command": "node",
-      "args": ["/absolute/path/to/WebsiteToJSON/mcp-server.js"]
+      "command": "npx",
+      "args": ["-y", "dos-browser-mcp"]
     }
   }
 }
 ```
+
+> If you are running from a local checkout instead of the published package, use
+> `"command": "node"` with `"args": ["/absolute/path/to/WebsiteToJSON/mcp-server.js"]`.
 
 ### Available AI Tools
 
