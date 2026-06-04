@@ -1,6 +1,34 @@
 # DOS Browser 🌐👾
 
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![npm downloads](https://img.shields.io/npm/dm/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![license](https://img.shields.io/npm/l/dos-browser.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/dos-browser.svg)](https://nodejs.org)
+
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+---
+
+## ⚡ Quick Start
+
+No clone required — run any interface straight from npm with `npx`:
+
+```bash
+# Interactive Terminal UI
+npx dos-browser https://news.ycombinator.com/
+
+# Headless JSON extractor (pipe-friendly)
+npx dos-browser-cli https://en.wikipedia.org/wiki/Terminal
+
+# MCP server over stdio (for AI agents)
+npx dos-browser-mcp
+```
+
+Or install it globally to get the `dos-browser`, `dos-browser-cli`, and `dos-browser-mcp` commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+```
 
 ---
 
@@ -51,7 +79,20 @@ A native webview side-panel inside VS Code.
 DOS Browser exposes a standard **MCP Server** via `stdio` that grants any AI agent full semantic access to the web, powered by our custom Ad Blocker, Cookie Bypasser, and Prompt Injection firewalls.
 
 ### Setup for MCP Clients (Claude Desktop, Cursor, etc)
-Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
+Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`. The recommended way is via `npx`, which always pulls the latest published version:
+
+```json
+{
+  "mcpServers": {
+    "dos-browser": {
+      "command": "npx",
+      "args": ["-y", "dos-browser-mcp"]
+    }
+  }
+}
+```
+
+If you are working from a local clone instead, point `command` at `node` and pass the absolute path to `mcp-server.js`:
 
 ```json
 {
@@ -63,6 +104,8 @@ Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
   }
 }
 ```
+
+> DOS Browser ships a [`server.json`](./server.json) manifest so it can be discovered through the official [MCP Registry](https://github.com/modelcontextprotocol/registry).
 
 ### Available AI Tools
 
