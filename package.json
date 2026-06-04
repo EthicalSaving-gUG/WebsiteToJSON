@@ -1,28 +1,71 @@
 {
-  "name": "temp",
-  "version": "0.1.0",
-  "private": true,
+  "name": "dos-browser",
+  "version": "1.0.0",
+  "description": "A retro-styled, semantic web-to-JSON/Markdown browsing suite for humans and AI agents. Ships an MCP server, a headless CLI, an interactive terminal UI, and a VS Code extension, with a built-in ad blocker, cookie-wall bypass, and prompt-injection firewall.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "web-scraping",
+    "html-to-json",
+    "html-to-markdown",
+    "dom-extraction",
+    "readability",
+    "ai",
+    "llm",
+    "agent",
+    "browser",
+    "cli",
+    "tui",
+    "prompt-injection",
+    "ad-blocker"
+  ],
+  "homepage": "https://github.com/EthicalSaving-gUG/WebsiteToJSON#readme",
+  "bugs": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EthicalSaving-gUG/WebsiteToJSON.git"
+  },
+  "license": "MIT",
+  "author": "EthicalSaving gUG <fabian@ethicalsaving.org>",
+  "type": "commonjs",
+  "main": "mcp-server.js",
+  "bin": {
+    "dos-browser": "tui-browser.js",
+    "dos-browser-cli": "browser-cli.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
+  "files": [
+    "mcp-server.js",
+    "browser-cli.js",
+    "tui-browser.js",
+    "config.json",
+    "promt_injections.csv",
+    "src/credentials",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "clean": "taskkill /F /IM node.exe /T"
+    "test": "node test/smoke.test.js",
+    "mcp": "node mcp-server.js",
+    "cli": "node browser-cli.js",
+    "tui": "node tui-browser.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@mozilla/readability": "^0.5.0",
-    "autoprefixer": "^10.4.27",
     "blessed": "^0.1.81",
     "dompurify": "^3.1.5",
-    "jimp": "^0.22.12",
     "jsdom": "^24.1.0",
-    "next": "16.1.6",
-    "open": "^11.0.0",
-    "postcss": "^8.5.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "tailwindcss": "^4.2.1"
+    "open": "^11.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",
@@ -31,8 +74,15 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.27",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "jimp": "^0.22.12",
+    "next": "16.1.6",
+    "postcss": "^8.5.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "tailwindcss": "^4.2.1",
     "typescript": "^5"
   }
 }
