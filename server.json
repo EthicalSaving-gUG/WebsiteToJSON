@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.ethicalsaving-gug/dos-browser",
+  "description": "Turn any website into clean, semantic Markdown/JSON for AI agents, with built-in ad blocking, cookie-wall bypass, and prompt-injection filtering.",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registry_type": "npm",
+      "registry_base_url": "https://registry.npmjs.org",
+      "identifier": "dos-browser",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
