@@ -1,6 +1,32 @@
 # DOS Browser 🌐👾
 
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![npm downloads](https://img.shields.io/npm/dm/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](https://modelcontextprotocol.io)
+
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+---
+
+## ⚡ Quick Start
+
+No install required — point it at any URL with `npx`:
+
+```bash
+# Dump a website as clean, semantic JSON (the "WebsiteToJSON" core)
+npx dos-browser https://en.wikipedia.org/wiki/Terminal
+
+# Browse interactively in your terminal
+npx -p dos-browser dos-browser-tui https://news.ycombinator.com/
+```
+
+Or install globally to get the `dos-browser`, `dos-browser-tui`, and `dos-browser-mcp` commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+```
 
 ---
 
@@ -51,7 +77,22 @@ A native webview side-panel inside VS Code.
 DOS Browser exposes a standard **MCP Server** via `stdio` that grants any AI agent full semantic access to the web, powered by our custom Ad Blocker, Cookie Bypasser, and Prompt Injection firewalls.
 
 ### Setup for MCP Clients (Claude Desktop, Cursor, etc)
-Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
+Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`.
+
+**Recommended (zero clone, via npx):**
+
+```json
+{
+  "mcpServers": {
+    "dos-browser": {
+      "command": "npx",
+      "args": ["-y", "-p", "dos-browser", "dos-browser-mcp"]
+    }
+  }
+}
+```
+
+**From a local checkout:**
 
 ```json
 {
@@ -89,5 +130,21 @@ Downloads an image directly from a URL and returns it to the AI as a native Base
 
 **Arguments**:
 - `url` (String, required): The target image URL.
+
+---
+
+## 📦 Availability
+
+| Channel | Listing | Install |
+| --- | --- | --- |
+| **npm** | [`dos-browser`](https://www.npmjs.com/package/dos-browser) | `npm install -g dos-browser` |
+| **MCP Registry** | `io.github.ethicalsaving-gug/dos-browser` | see [`server.json`](server.json) |
+| **VS Code** | DOS Browser extension | see [`dos-browser-vscode`](dos-browser-vscode) |
+
+### Releasing (maintainers)
+
+A new npm release is published automatically by [`.github/workflows/npm-publish.yml`](.github/workflows/npm-publish.yml) when a GitHub Release is created (requires the `npm_token` repository secret). To list/update the MCP Registry entry, install the [`mcp-publisher`](https://modelcontextprotocol.io/registry/quickstart) CLI and run `mcp-publisher publish` against [`server.json`](server.json) — the `mcpName` field in `package.json` already matches the registry name.
+
+---
 
 Have fun browsing the retro web! 🚀
