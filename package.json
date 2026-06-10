@@ -1,13 +1,61 @@
 {
-  "name": "temp",
-  "version": "0.1.0",
-  "private": true,
+  "name": "dos-browser",
+  "version": "1.0.0",
+  "description": "Retro-styled web browsing suite that extracts the semantic meaning of any website as clean JSON/Markdown. Ships a CLI, terminal UI, VS Code extension, and an MCP server with a built-in ad blocker, cookie-wall bypass, and prompt-injection firewall for AI agents.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "ai-agent",
+    "web-scraping",
+    "scraper",
+    "website-to-json",
+    "html-to-markdown",
+    "readability",
+    "dom-parser",
+    "prompt-injection",
+    "ad-blocker",
+    "cookie-wall",
+    "cli",
+    "tui",
+    "browser"
+  ],
+  "homepage": "https://github.com/EthicalSaving-gUG/WebsiteToJSON#readme",
+  "bugs": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EthicalSaving-gUG/WebsiteToJSON.git"
+  },
+  "license": "MIT",
+  "author": "EthicalSaving gUG",
+  "type": "commonjs",
+  "bin": {
+    "dos-browser": "tui-browser.js",
+    "dos-browser-cli": "browser-cli.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
+  "files": [
+    "browser-cli.js",
+    "tui-browser.js",
+    "mcp-server.js",
+    "config.json",
+    "server.json",
+    "src/credentials/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "mcp": "node mcp-server.js",
+    "tui": "node tui-browser.js",
+    "cli": "node browser-cli.js",
     "lint": "eslint",
-    "clean": "taskkill /F /IM node.exe /T"
+    "test": "node --test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
