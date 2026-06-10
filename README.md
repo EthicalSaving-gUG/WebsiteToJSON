@@ -1,6 +1,28 @@
 # DOS Browser 🌐👾
 
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![node](https://img.shields.io/node/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![license](https://img.shields.io/npm/l/dos-browser.svg)](./LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-server-blue)](https://modelcontextprotocol.io)
+
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+## ⚡ Quick Start
+
+Run any interface instantly with `npx` — no install, no clone:
+
+```bash
+# Interactive terminal browser
+npx dos-browser https://news.ycombinator.com/
+
+# Headless JSON extractor (pipe it anywhere)
+npx -p dos-browser dos-browser-cli https://en.wikipedia.org/wiki/Terminal
+
+# MCP server for AI agents (stdio)
+npx -p dos-browser dos-browser-mcp
+```
+
+Or install globally: `npm install -g dos-browser`.
 
 ---
 
@@ -51,18 +73,22 @@ A native webview side-panel inside VS Code.
 DOS Browser exposes a standard **MCP Server** via `stdio` that grants any AI agent full semantic access to the web, powered by our custom Ad Blocker, Cookie Bypasser, and Prompt Injection firewalls.
 
 ### Setup for MCP Clients (Claude Desktop, Cursor, etc)
-Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
+Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`. The recommended way is via `npx`, which always pulls the latest published version:
 
 ```json
 {
   "mcpServers": {
     "dos-browser": {
-      "command": "node",
-      "args": ["/absolute/path/to/WebsiteToJSON/mcp-server.js"]
+      "command": "npx",
+      "args": ["-y", "-p", "dos-browser", "dos-browser-mcp"]
     }
   }
 }
 ```
+
+> Prefer a local checkout? Point `command` at `node` and `args` at the absolute path to `mcp-server.js` instead.
+
+This server is published to npm as [`dos-browser`](https://www.npmjs.com/package/dos-browser) and listed in the [Model Context Protocol registry](https://modelcontextprotocol.io) (see [`server.json`](./server.json)).
 
 ### Available AI Tools
 
