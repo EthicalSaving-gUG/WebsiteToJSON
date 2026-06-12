@@ -1,6 +1,34 @@
 # DOS Browser 🌐👾
 
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![Node.js](https://img.shields.io/node/v/dos-browser.svg)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![MCP](https://img.shields.io/badge/Model_Context_Protocol-ready-blueviolet.svg)](https://modelcontextprotocol.io)
+
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+---
+
+## 📦 Install
+
+Run any of the interfaces instantly with `npx` — no global install required:
+
+```bash
+# Dump a page as semantically-cleaned JSON
+npx dos-browser https://en.wikipedia.org/wiki/Terminal
+
+# Launch the interactive terminal UI
+npx dos-browser-tui https://news.ycombinator.com/
+
+# Start the MCP server (stdio) for AI agents
+npx dos-browser-mcp
+```
+
+Or install globally to get the `dos-browser`, `dos-browser-tui`, and `dos-browser-mcp` commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+```
 
 ---
 
@@ -51,7 +79,20 @@ A native webview side-panel inside VS Code.
 DOS Browser exposes a standard **MCP Server** via `stdio` that grants any AI agent full semantic access to the web, powered by our custom Ad Blocker, Cookie Bypasser, and Prompt Injection firewalls.
 
 ### Setup for MCP Clients (Claude Desktop, Cursor, etc)
-Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
+Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`. The easiest way is via `npx` (always fetches the latest published version):
+
+```json
+{
+  "mcpServers": {
+    "dos-browser": {
+      "command": "npx",
+      "args": ["-y", "dos-browser-mcp"]
+    }
+  }
+}
+```
+
+Or, if you are running from a local checkout, point `node` at the server directly:
 
 ```json
 {
@@ -91,3 +132,9 @@ Downloads an image directly from a URL and returns it to the AI as a native Base
 - `url` (String, required): The target image URL.
 
 Have fun browsing the retro web! 🚀
+
+---
+
+## 📄 License
+
+Released under the [MIT License](./LICENSE). © EthicalSaving gUG.
