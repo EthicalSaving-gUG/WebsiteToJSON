@@ -62,6 +62,7 @@ export class CredentialProvider {
 /** Registry fuer Provider */
 const providerRegistry = {
   'manual': null,
+  'ssh': null,
   'keepassxc': null,
   'vaultwarden': null,
   'browser-import-chrome': null,

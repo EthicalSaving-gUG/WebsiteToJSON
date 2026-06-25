@@ -92,6 +92,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 }
             },
             {
+                name: "get_ssh_credentials",
+                description: "Retrieve SSH credentials (username and password) for a specific host from the password manager.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        host: {
+                            type: "string",
+                            description: "The SSH host to retrieve credentials for (e.g. 192.168.1.1 or ssh://user@host)"
+                        }
+                    },
+                    required: ["host"]
+                }
+            },
+            {
                 name: "fetch_image",
                 description: "Download an image from a URL and return it as a base64 encoded image for AI vision models.",
                 inputSchema: {
@@ -110,6 +124,37 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+
+    if (request.params.name === "get_ssh_credentials") {
+        try {
+            const SSHProvider = (await import('./src/credentials/SSHProvider.js')).SSHProvider;
+            // Maintain a global instance or create one if we had config.
+            // In DOS Browser, SSHProvider usually relies on its own file config or ssh agent.
+            // We will instantiate and load mock credentials or allow it to be driven by external integration later.
+            // But let's assume it has its own initialize method that could load from ssh agent or a file.
+            const provider = new SSHProvider();
+            await provider.initialize();
+
+            const meta = await provider.getCredentialMeta(request.params.arguments.host);
+            if (!meta) {
+                 return {
+                    content: [{ type: "text", text: "No SSH credentials found for host: " + request.params.arguments.host }],
+                    isError: false,
+                };
+            }
+            const password = await provider.getPassword(request.params.arguments.host);
+
+            return {
+                content: [{ type: "text", text: JSON.stringify({ host: meta.id, username: meta.username, password: password }) }],
+            };
+        } catch(error) {
+            return {
+                content: [{ type: "text", text: `Error retrieving SSH credentials: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
