@@ -84,6 +84,21 @@ Here is the breaking news text of the article we found.
 ![Stock Photo](https://example.com/img.jpg)
 ```
 
+#### `get_ssh_credentials`
+Retrieves SSH credentials (username and password) stored in the internal Password Manager (via `SSHProvider` in `src/credentials`).
+
+**Arguments**:
+- `host` (String, required): The target SSH host or URL (e.g., `192.168.1.1` or `ssh://user@host`).
+
+**Example Response**:
+```json
+{
+  "host": "192.168.1.1",
+  "username": "root",
+  "password": "supersecretpassword"
+}
+```
+
 #### `fetch_image`
 Downloads an image directly from a URL and returns it to the AI as a native Base64-encoded `image` block. This allows modern vision-capable LLMs to actually "see" the pictures embedded in the scraped websites.
 
