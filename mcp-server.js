@@ -92,6 +92,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 }
             },
             {
+                name: "get_credentials",
+                description: "Retrieve credential metadata (especially SSH credentials) from the password manager.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label or identifier of the credential."
+                        },
+                        provider: {
+                            type: "string",
+                            description: "The provider to use, e.g., 'ssh' or 'mcp'."
+                        }
+                    },
+                    required: ["label"]
+                }
+            },
+            {
                 name: "fetch_image",
                 description: "Download an image from a URL and return it as a base64 encoded image for AI vision models.",
                 inputSchema: {
@@ -110,6 +128,64 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "get_credentials") {
+        const targetLabel = request.params.arguments.label;
+        const targetProvider = request.params.arguments.provider || 'default';
+
+        // Lazy load the credentials module via dynamic import
+        try {
+            // Note: Since mcp-server.js runs as CJS script (commonjs), we need to use dynamic import()
+            // for the ES modules in src/credentials.
+            const { getProvider } = await import('./src/credentials/CredentialProvider.js');
+            const { SSHProvider } = await import('./src/credentials/SSHProvider.js');
+            const { MCPProvider } = await import('./src/credentials/MCPProvider.js');
+
+            let providerInstance = getProvider(targetProvider);
+            if (!providerInstance) {
+                 if (targetProvider === 'ssh') {
+                      providerInstance = new SSHProvider();
+                 } else if (targetProvider === 'mcp') {
+                      providerInstance = new MCPProvider();
+                 } else {
+                      return {
+                          content: [{ type: "text", text: `Error: Provider ${targetProvider} is not supported or not registered.` }],
+                          isError: true,
+                      };
+                 }
+                 await providerInstance.initialize();
+            }
+
+            const meta = await providerInstance.getCredentialMeta(targetLabel);
+            if (meta) {
+                 let passwordInfo = "Note: Passwords are not directly exposed by meta-data only providers for security.";
+
+                 // If the provider supports retrieving actual passwords (like SSH or browser import)
+                 if (typeof providerInstance.getPassword === 'function') {
+                     const pass = await providerInstance.getPassword(targetLabel);
+                     if (pass) {
+                         passwordInfo = `Password: ${pass}`;
+                     }
+                 }
+
+                 return {
+                     content: [
+                         { type: "text", text: `Credential found! Provider: ${meta.providerType}\nID: ${meta.id}\nLabel: ${meta.label}\nUsername: ${meta.username || 'N/A'}\n${passwordInfo}` }
+                     ]
+                 };
+            } else {
+                 return {
+                     content: [{ type: "text", text: `No credential found for label: ${targetLabel}` }],
+                 };
+            }
+
+        } catch (e) {
+            return {
+                content: [{ type: "text", text: `Failed to retrieve credentials: ${e.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
