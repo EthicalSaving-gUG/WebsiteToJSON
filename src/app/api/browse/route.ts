@@ -87,8 +87,26 @@ export async function GET(request: Request) {
             return false;
         }
 
+        async function handleFileDownload(downloadUrl: string, resp: Response) {
+            const arrayBuffer = await resp.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            let fileName = 'download';
+            try {
+                fileName = path.basename(new URL(downloadUrl).pathname) || 'download';
+            } catch (e) { /* keep default */ }
+            return new NextResponse(buffer, {
+                status: 200,
+                headers: {
+                    'Content-Type': resp.headers.get('content-type') || 'application/octet-stream',
+                    'Content-Disposition': `attachment; filename="${fileName}"`,
+                    'Content-Length': String(buffer.length)
+                }
+            });
+        }
+
         let html = '';
         let contentType = '';
+        let response: Response | null = null;
 
         if (jsRender) {
             diagnosticReport.otherIssues.push('[JS_RENDER] Using forced Puppeteer engine via API.');
@@ -126,7 +144,7 @@ export async function GET(request: Request) {
                 return NextResponse.json({ error: `Puppeteer failed to boot JS render: ${e.message}` }, { status: 500 });
             }
         } else {
-            let response = await fetch(targetUrl, {
+            response = await fetch(targetUrl, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -161,7 +179,7 @@ export async function GET(request: Request) {
             return hasCaptcha;
         }
 
-        if (needsCaptcha(html, response.status)) {
+        if (needsCaptcha(html, response?.status ?? 200)) {
             diagnosticReport.captchaSolverUsed = captchaMode || 'none';
             if (captchaMode === 'browser') {
                 console.error(`[CAPTCHA] Opening ${targetUrl} in system browser...`);
@@ -476,7 +494,9 @@ export async function GET(request: Request) {
                 const domain = urlObj.hostname.replace(/[^a-z0-9]/gi, '_');
                 const timestamp = new Date().getTime();
                 const reportFileName = `report-${domain}-${timestamp}.json`;
-                const reportPath = path.join(process.cwd(), 'Reports', reportFileName);
+                const reportsDir = path.join(process.cwd(), 'Reports');
+                if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+                const reportPath = path.join(reportsDir, reportFileName);
                 fs.writeFileSync(reportPath, JSON.stringify(diagnosticReport, null, 2));
             } catch (e: any) {
                 diagnosticReport.otherIssues.push(`[REPORT ERROR] Failed to save report: ${e.message}`);
