@@ -1,6 +1,34 @@
 # DOS Browser 🌐👾
 
-The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![license](https://img.shields.io/npm/l/dos-browser.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/dos-browser.svg)](https://nodejs.org/)
+[![MCP](https://img.shields.io/badge/MCP-server-blueviolet.svg)](https://modelcontextprotocol.io/)
+
+The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites (**website-to-JSON**). It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+---
+
+## 🚀 Quick Start
+
+No clone required — run any interface straight from npm with `npx`:
+
+```bash
+# Interactive terminal UI
+npx dos-browser https://news.ycombinator.com/
+
+# Headless JSON extractor (pipe-friendly)
+npx dos-browser-cli https://en.wikipedia.org/wiki/Terminal
+
+# MCP server for AI agents (stdio)
+npx dos-browser-mcp
+```
+
+Or install it globally to get the `dos-browser`, `dos-browser-cli` and `dos-browser-mcp` commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+```
 
 ---
 
@@ -57,12 +85,14 @@ Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
 {
   "mcpServers": {
     "dos-browser": {
-      "command": "node",
-      "args": ["/absolute/path/to/WebsiteToJSON/mcp-server.js"]
+      "command": "npx",
+      "args": ["-y", "dos-browser-mcp"]
     }
   }
 }
 ```
+
+> Prefer a local checkout? Point `command` at `node` and `args` at the absolute path of `mcp-server.js` instead.
 
 ### Available AI Tools
 
@@ -89,5 +119,19 @@ Downloads an image directly from a URL and returns it to the AI as a native Base
 
 **Arguments**:
 - `url` (String, required): The target image URL.
+
+---
+
+## 🔐 Responsible Use & Security
+
+DOS Browser includes powerful capabilities — a prompt-injection firewall, an ad blocker, cookie-wall fallbacks, and optional local credential/password import helpers. Please use them responsibly:
+
+- **Respect site terms & robots.** The cookie-wall and bot-check fallbacks are intended for accessibility and personal research, not for evading paywalls or abusing services at scale.
+- **Credentials stay local.** The browser password import and KeePassXC/Bitwarden providers operate only on your own machine and your own stored credentials; nothing is transmitted off-device by DOS Browser.
+- **Prompt-injection filtering is a safety net, not a guarantee.** Always keep a human (or a sandbox) in the loop when feeding scraped content to an LLM.
+
+Found a security issue? Please open a private report via the [issue tracker](https://github.com/EthicalSaving-gUG/WebsiteToJSON/issues).
+
+---
 
 Have fun browsing the retro web! 🚀

@@ -1,13 +1,63 @@
 {
-  "name": "temp",
-  "version": "0.1.0",
-  "private": true,
+  "name": "dos-browser",
+  "version": "0.2.0",
+  "description": "Retro-styled, AI-friendly web browsing suite for Node.js. Heuristic semantic DOM extraction (website-to-JSON), prompt-injection firewall, ad blocker and cookie-wall bypass, exposed via a CLI, a terminal UI, a VS Code extension and an MCP server for AI agents.",
+  "keywords": [
+    "browser",
+    "scraper",
+    "web-scraping",
+    "html-to-json",
+    "website-to-json",
+    "dom",
+    "readability",
+    "mcp",
+    "model-context-protocol",
+    "ai-agent",
+    "llm",
+    "prompt-injection",
+    "tui",
+    "cli",
+    "terminal"
+  ],
+  "homepage": "https://github.com/EthicalSaving-gUG/WebsiteToJSON#readme",
+  "bugs": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EthicalSaving-gUG/WebsiteToJSON.git"
+  },
+  "license": "MIT",
+  "author": "EthicalSaving gUG",
+  "main": "browser-cli.js",
+  "bin": {
+    "dos-browser": "tui-browser.js",
+    "dos-browser-tui": "tui-browser.js",
+    "dos-browser-cli": "browser-cli.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
+  "files": [
+    "browser-cli.js",
+    "tui-browser.js",
+    "mcp-server.js",
+    "config.json",
+    "src/credentials/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "clean": "taskkill /F /IM node.exe /T"
+    "test": "node test/smoke.js",
+    "cli": "node browser-cli.js",
+    "tui": "node tui-browser.js",
+    "mcp": "node mcp-server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -23,6 +73,11 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "tailwindcss": "^4.2.1"
+  },
+  "optionalDependencies": {
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",

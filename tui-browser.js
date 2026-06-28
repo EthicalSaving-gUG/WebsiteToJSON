@@ -530,7 +530,7 @@ async function fetchAndRender(url) {
             if (!workingDocument.defaultView) return false;
             try {
                 const style = workingDocument.defaultView.getComputedStyle(el);
-                if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || style.zIndex < 0) {
+                if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || parseInt(style.zIndex || '0', 10) < 0) {
                     diagnosticReport.obstructiveCssNodes++;
                     return true;
                 }
@@ -672,7 +672,9 @@ async function fetchAndRender(url) {
                 const domain = urlObj.hostname.replace(/[^a-z0-9]/gi, '_');
                 const timestamp = new Date().getTime();
                 const reportFileName = `report-${domain}-${timestamp}.json`;
-                const reportPath = path.join(process.cwd(), 'Reports', reportFileName);
+                const reportsDir = path.join(process.cwd(), 'Reports');
+                if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+                const reportPath = path.join(reportsDir, reportFileName);
                 fs.writeFileSync(reportPath, JSON.stringify(diagnosticReport, null, 2));
                 // Show brief success toast in TUI
                 const originalTitle = screen.title;

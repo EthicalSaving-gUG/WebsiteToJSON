@@ -47,10 +47,9 @@ export class KeepassXCProvider extends CredentialProvider {
     if (!this.initialized) return null;
 
     try {
-      const response = await fetch('/api/credentials/status?type=keepassxc', {
+      const response = await fetch(`/api/credentials/status?type=keepassxc&label=${encodeURIComponent(label)}`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label })
+        headers: { 'Content-Type': 'application/json' }
       });
 
       if (response.ok) {

@@ -352,7 +352,7 @@ async function main() {
             if (!workingDocument.defaultView) return false;
             try {
                 const style = workingDocument.defaultView.getComputedStyle(el);
-                if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || style.zIndex < 0) {
+                if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || parseInt(style.zIndex || '0', 10) < 0) {
                     diagnosticReport.obstructiveCssNodes++;
                     return true;
                 }
@@ -539,7 +539,9 @@ async function main() {
                 const domain = urlObj.hostname.replace(/[^a-z0-9]/gi, '_');
                 const timestamp = new Date().getTime();
                 const reportFileName = `report-${domain}-${timestamp}.json`;
-                const reportPath = require('path').join(process.cwd(), 'Reports', reportFileName);
+                const reportsDir = require('path').join(process.cwd(), 'Reports');
+                if (!require('fs').existsSync(reportsDir)) require('fs').mkdirSync(reportsDir, { recursive: true });
+                const reportPath = require('path').join(reportsDir, reportFileName);
                 require('fs').writeFileSync(reportPath, JSON.stringify(diagnosticReport, null, 2));
                 console.error(`[REPORT] Extraction diagnostic saved to ${reportPath}`);
             } catch (e) {
