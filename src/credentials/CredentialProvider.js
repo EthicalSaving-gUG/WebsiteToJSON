@@ -67,7 +67,9 @@ const providerRegistry = {
   'browser-import-chrome': null,
   'browser-import-firefox': null,
   'browser-import-edge': null,
-  'browser-import-brave': null
+  'browser-import-brave': null,
+  'ssh': null,
+  'mcp': null
 };
 
 export const registerProvider = (type, instance) => {
