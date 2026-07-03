@@ -27,7 +27,7 @@ export class CredentialProvider {
    * @param {string} label - Bezeichnung des Eintrags (z.B. 'plesk/highspeed-cloud/account1248')
    * @returns {Promise<CredentialMeta|null>}
    */
-  async getCredentialsMeta(label) {
+  async getCredentialMeta(label) {
     throw new Error('Method getCredentialMeta() must be implemented by subclass');
   }
 
@@ -67,7 +67,9 @@ const providerRegistry = {
   'browser-import-chrome': null,
   'browser-import-firefox': null,
   'browser-import-edge': null,
-  'browser-import-brave': null
+  'browser-import-brave': null,
+  'ssh': null,
+  'mcp': null
 };
 
 export const registerProvider = (type, instance) => {
