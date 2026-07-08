@@ -7,8 +7,8 @@
  * 3. Use them with the KeePassXC provider for secure management
  */
 
-import { BrowserPasswordImporter } from './credentials/BrowserPasswordImporter.js';
-import { KeepassXCProvider } from './credentials/KeepassXCProvider.js';
+import { BrowserPasswordImporter } from '../src/credentials/BrowserPasswordImporter.js';
+import { KeepassXCProvider } from '../src/credentials/KeepassXCProvider.js';
 import fs from 'fs';
 
 async function main() {
