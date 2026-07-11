@@ -832,6 +832,7 @@ screen.on('mouse', function (data) {
     }
 });
 
+import('./src/credentials/index.js').then(() => {
 const initialUrl = args.find(a => !a.startsWith('--'));
 if (initialUrl) {
     urlInput.setValue(initialUrl);
@@ -840,3 +841,4 @@ if (initialUrl) {
     urlInput.focus();
 }
 screen.render();
+}).catch(console.error);
