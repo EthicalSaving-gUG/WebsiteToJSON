@@ -104,6 +104,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     required: ["url"]
                 }
+            },
+            {
+                name: "get_ssh_credentials",
+                description: "Fetch an SSH credential (username and password) by label.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label or identifier for the SSH credential."
+                        }
+                    },
+                    required: ["label"]
+                }
             }
         ]
     };
@@ -527,6 +541,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 content: [{ type: "text", text: `Scraping error: ${error.message}` }],
                 isError: true,
             };
+        }
+    } else if (request.params.name === "get_ssh_credentials") {
+        const label = request.params.arguments.label;
+        try {
+            const { getProvider } = await import('./src/credentials/index.js');
+            const sshProvider = getProvider('ssh');
+
+            if (!sshProvider) {
+                 return {
+                    content: [{ type: "text", text: "SSH provider is not registered." }],
+                    isError: true,
+                 };
+            }
+
+            await sshProvider.initialize();
+            const meta = await sshProvider.getCredentialMeta(label);
+
+            if (!meta) {
+                 return {
+                    content: [{ type: "text", text: `No credentials found for label: ${label}` }],
+                    isError: true,
+                 };
+            }
+
+            return {
+                 content: [{ type: "text", text: JSON.stringify(meta, null, 2) }]
+            };
+        } catch (error) {
+             return {
+                content: [{ type: "text", text: `Error fetching SSH credentials: ${error.message}` }],
+                isError: true,
+             };
         }
     }
     throw new Error(`Tool not found: ${request.params.name}`);
