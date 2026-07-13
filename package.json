@@ -15,6 +15,7 @@
     "autoprefixer": "^10.4.27",
     "blessed": "^0.1.81",
     "dompurify": "^3.1.5",
+    "is-in-ssh": "^1.0.0",
     "jimp": "^0.22.12",
     "jsdom": "^24.1.0",
     "next": "16.1.6",

@@ -61,6 +61,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
         tools: [
             {
+                name: "get_ssh_credentials",
+                description: "Securely retrieve SSH credentials (username and password) from the password manager.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label or identifier of the SSH credential to retrieve."
+                        }
+                    },
+                    required: ["label"]
+                }
+            },
+            {
                 name: "browse_website",
                 description: "Parse and extract a website DOM for AI ingestion. Includes Cookie Wall bypassing, prompt injection filtering, and ad-blocking.",
                 inputSchema: {
@@ -110,6 +124,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "get_ssh_credentials") {
+        const { label } = request.params.arguments;
+        try {
+            const { getProvider } = await import('./src/credentials/index.js');
+            const sshProvider = getProvider('ssh');
+
+            if (!sshProvider) {
+                return {
+                    content: [{ type: "text", text: "Error: SSH Provider is not configured or available." }],
+                    isError: true,
+                };
+            }
+
+            if (!sshProvider.initialized) {
+                await sshProvider.initialize();
+            }
+
+            const meta = await sshProvider.getCredentialMeta(label);
+            if (!meta) {
+                return {
+                    content: [{ type: "text", text: `Error: No SSH credentials found for label: ${label}` }],
+                    isError: true,
+                };
+            }
+
+            return {
+                content: [{ type: "text", text: JSON.stringify(meta, null, 2) }]
+            };
+        } catch (error) {
+            return {
+                content: [{ type: "text", text: `SSH Credential error: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
@@ -533,6 +583,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+    // Dynamic import to populate providerRegistry
+    await import('./src/credentials/index.js').catch(e => {
+        console.error("Failed to load credential providers:", e.message);
+    });
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("DOS Browser MCP Server running on stdio");
