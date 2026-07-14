@@ -104,12 +104,59 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     required: ["url"]
                 }
+            },
+            {
+                name: "get_ssh_credential",
+                description: "Retrieve SSH credentials (username and password) from the password manager for a given label.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label of the SSH credential to retrieve."
+                        }
+                    },
+                    required: ["label"]
+                }
             }
         ]
     };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "get_ssh_credential") {
+        try {
+            const { getProvider } = await import('./src/credentials/index.js');
+            const sshProvider = getProvider('ssh');
+
+            if (!sshProvider) {
+                return {
+                    content: [{ type: "text", text: "SSH provider not initialized or found." }],
+                    isError: true,
+                };
+            }
+
+            const label = request.params.arguments.label;
+            const meta = await sshProvider.getCredentialsMeta(label);
+
+            if (meta && meta.password) {
+                return {
+                    content: [{ type: "text", text: `Username: ${meta.username || ''}\nPassword: ${meta.password}` }]
+                };
+            } else {
+                 return {
+                    content: [{ type: "text", text: `No SSH credentials found for label: ${label}` }],
+                    isError: true,
+                };
+            }
+        } catch (error) {
+             return {
+                content: [{ type: "text", text: `Error retrieving SSH credentials: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
@@ -533,6 +580,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+    await import('./src/credentials/index.js').catch(e => console.error('Failed to preload credentials registry:', e.message));
+
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("DOS Browser MCP Server running on stdio");
