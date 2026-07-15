@@ -104,12 +104,60 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     required: ["url"]
                 }
+            },
+            {
+                name: "ssh_credentials",
+                description: "Retrieve SSH credentials (username and password) using a label identifier from the password manager.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label or identifier for the SSH credentials."
+                        }
+                    },
+                    required: ["label"]
+                }
             }
         ]
     };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "ssh_credentials") {
+        const label = request.params.arguments.label;
+        try {
+            const indexMod = await import("file://" + path.resolve(__dirname, "src/credentials/index.js"));
+            const { getProvider } = indexMod;
+            const provider = getProvider("ssh");
+
+            if (!provider) {
+                return {
+                    content: [{ type: "text", text: "Error: SSH Provider is not registered." }],
+                    isError: true,
+                };
+            }
+
+            await provider.initialize();
+            const meta = await provider.getCredentialMeta(label);
+
+            if (meta) {
+                return {
+                    content: [{ type: "text", text: JSON.stringify(meta, null, 2) }]
+                };
+            } else {
+                return {
+                    content: [{ type: "text", text: `No SSH credentials found for label: ${label}` }]
+                };
+            }
+        } catch (error) {
+            return {
+                content: [{ type: "text", text: `Error retrieving SSH credentials: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
