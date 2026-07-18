@@ -1,6 +1,7 @@
 {
   "name": "dos-browser",
   "version": "0.1.0",
+  "mcpName": "io.github.ethicalsaving-gug/dos-browser",
   "description": "A retro-styled, security-hardened web browsing suite for humans and AI agents. Extracts the semantic meaning of any website as clean JSON/Markdown, with prompt-injection filtering, ad-blocking, and cookie-wall bypass. Ships a CLI, a TUI, a VS Code extension, and an MCP server.",
   "keywords": [
     "mcp",
@@ -39,14 +40,12 @@
     "tui-browser.js",
     "mcp-server.js",
     "config.json",
-    "promt_injections.csv",
     "server.json",
-    "src/credentials/",
     "README.md",
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20.9.0"
   },
   "scripts": {
     "dev": "next dev",

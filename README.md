@@ -15,13 +15,13 @@ No install required — run any interface straight from npm with `npx`:
 
 ```bash
 # Dump a website as clean, semantic JSON to stdout
-npx dos-browser https://en.wikipedia.org/wiki/Terminal
+npx -y dos-browser https://en.wikipedia.org/wiki/Terminal
 
 # Launch the interactive terminal UI
-npx dos-browser-tui https://news.ycombinator.com/
+npx -y dos-browser-tui https://news.ycombinator.com/
 
 # Start the MCP server for AI agents (stdio transport)
-npx -p dos-browser dos-browser-mcp
+npx -y -p dos-browser dos-browser-mcp
 ```
 
 Or install globally to get the `dos-browser`, `dos-browser-tui`, and `dos-browser-mcp` commands on your `PATH`:
@@ -86,7 +86,7 @@ Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`. The recomm
   "mcpServers": {
     "dos-browser": {
       "command": "npx",
-      "args": ["-p", "dos-browser", "dos-browser-mcp"]
+      "args": ["-y", "-p", "dos-browser", "dos-browser-mcp"]
     }
   }
 }

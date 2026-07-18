@@ -81,8 +81,9 @@ test('every bin target exists and is executable JS', () => {
 });
 
 // 3. server.json (MCP registry manifest) is valid.
+const manifest = JSON.parse(fs.readFileSync(path.join(root, 'server.json'), 'utf8'));
+
 test('server.json is valid and consistent', () => {
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'server.json'), 'utf8'));
   assert.ok(manifest.name, 'server name required');
   assert.ok(manifest.version, 'server version required');
   assert.ok(Array.isArray(manifest.packages) && manifest.packages.length > 0, 'packages required');
@@ -94,6 +95,28 @@ test('server.json is valid and consistent', () => {
   const npmPkg = manifest.packages.find((p) => p.registryType === 'npm');
   assert.ok(npmPkg, 'an npm package entry is expected');
   assert.strictEqual(npmPkg.identifier, pkg.name, 'npm identifier should match package name');
+});
+
+test('server.json description fits the registry schema (<= 100 chars)', () => {
+  assert.ok(
+    manifest.description.length <= 100,
+    `description is ${manifest.description.length} chars, schema max is 100`,
+  );
+});
+
+test('package.json mcpName matches the server manifest name (registry verification)', () => {
+  assert.strictEqual(pkg.mcpName, manifest.name, 'mcpName must equal server.json name');
+});
+
+test('npx --package runtime arg is pinned to the manifest version', () => {
+  const npmPkg = manifest.packages.find((p) => p.registryType === 'npm');
+  const pkgArg = (npmPkg.runtimeArguments || []).find((a) => a.name === '--package');
+  assert.ok(pkgArg, 'a --package runtime argument is expected');
+  assert.strictEqual(
+    pkgArg.value,
+    `${pkg.name}@${pkg.version}`,
+    'pinned --package spec should be name@version so old registry entries do not run latest',
+  );
 });
 
 // 4. config.json is valid JSON.
