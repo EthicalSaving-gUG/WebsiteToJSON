@@ -1,6 +1,34 @@
 # DOS Browser 🌐👾
 
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-server-blueviolet.svg)](https://modelcontextprotocol.io)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+---
+
+## ⚡ Quick Start
+
+No install required — run any interface straight from npm with `npx`:
+
+```bash
+# Dump a website as clean, semantic JSON to stdout
+npx dos-browser https://en.wikipedia.org/wiki/Terminal
+
+# Launch the interactive terminal UI
+npx dos-browser-tui https://news.ycombinator.com/
+
+# Start the MCP server for AI agents (stdio transport)
+npx -p dos-browser dos-browser-mcp
+```
+
+Or install globally to get the `dos-browser`, `dos-browser-tui`, and `dos-browser-mcp` commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+```
 
 ---
 
@@ -51,7 +79,21 @@ A native webview side-panel inside VS Code.
 DOS Browser exposes a standard **MCP Server** via `stdio` that grants any AI agent full semantic access to the web, powered by our custom Ad Blocker, Cookie Bypasser, and Prompt Injection firewalls.
 
 ### Setup for MCP Clients (Claude Desktop, Cursor, etc)
-Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
+Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`. The recommended way is via `npx`, so it always runs the latest published version:
+
+```json
+{
+  "mcpServers": {
+    "dos-browser": {
+      "command": "npx",
+      "args": ["-p", "dos-browser", "dos-browser-mcp"]
+    }
+  }
+}
+```
+
+<details>
+<summary>Running from a local checkout instead</summary>
 
 ```json
 {
@@ -63,6 +105,7 @@ Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
   }
 }
 ```
+</details>
 
 ### Available AI Tools
 
@@ -89,5 +132,31 @@ Downloads an image directly from a URL and returns it to the AI as a native Base
 
 **Arguments**:
 - `url` (String, required): The target image URL.
+
+---
+
+## 📇 MCP Registry Listing
+
+DOS Browser ships a [`server.json`](./server.json) manifest conforming to the official [Model Context Protocol registry](https://registry.modelcontextprotocol.io) schema, so it can be discovered and installed directly from MCP-aware clients.
+
+Publishing to the registry is a one-time manual step performed with the official [`mcp-publisher`](https://github.com/modelcontextprotocol/registry) CLI after the npm package is released:
+
+```bash
+# Authenticate against your GitHub namespace, then publish the manifest
+mcp-publisher login github
+mcp-publisher publish
+```
+
+---
+
+## 📦 Publishing
+
+The npm package is published automatically by the [`npm-publish`](./.github/workflows/npm-publish.yml) GitHub Actions workflow whenever a GitHub Release is created. CI runs `npm test` (the zero-dependency smoke suite in [`test/`](./test/)) before publishing.
+
+---
+
+## 📄 License
+
+Released under the [MIT License](./LICENSE). © 2026 Ethical Saving gUG.
 
 Have fun browsing the retro web! 🚀
