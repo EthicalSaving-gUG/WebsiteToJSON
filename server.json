@@ -1,0 +1,39 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ethicalsaving-gug/dos-browser",
+  "title": "DOS Browser",
+  "description": "Semantic web access for AI agents: clean Markdown/JSON with injection filtering and ad-blocking.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/EthicalSaving-gUG/WebsiteToJSON#readme",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "dos-browser",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeHint": "npx",
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--yes"
+        },
+        {
+          "type": "named",
+          "name": "--package",
+          "value": "dos-browser@0.1.0"
+        },
+        {
+          "type": "positional",
+          "value": "dos-browser-mcp"
+        }
+      ]
+    }
+  ]
+}
