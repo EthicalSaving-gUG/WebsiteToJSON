@@ -27,10 +27,24 @@ machine, with your consent.
 
 ## Access-control bypass (paywalls / cookie walls / bot checks)
 
-The cookie-wall and Cloudflare/captcha handling in `src/app/api/browse/route.ts`
-circumvents publisher access controls and anti-bot measures. This can violate
-sites' Terms of Service and, in some jurisdictions, the law. Use only against
-targets you are authorized to access.
+The cookie-wall and Cloudflare/captcha handling circumvents publisher access
+controls and anti-bot measures. This can violate sites' Terms of Service and, in
+some jurisdictions, the law. Use only against targets you are authorized to
+access.
+
+This behavior is **not** confined to one file — it is implemented in every
+shipped entry point, so auditing or disabling it in one place is not enough:
+
+- `src/app/api/browse/route.ts` — the Next.js web API route
+- `browser-cli.js` — the headless CLI (`dos-browser-cli` bin)
+- `tui-browser.js` — the terminal UI (`dos-browser` bin)
+- `mcp-server.js` — the MCP server exposed to AI agents (`dos-browser-mcp` bin)
+- `dos-browser-vscode/` — the bundled VS Code extension
+
+The consent-cookie injection and Googlebot spoofing are duplicated across these;
+the Cloudflare/captcha path additionally relies on Puppeteer + a stealth plugin,
+which the CLI/TUI/MCP entry points install on demand. Anyone hardening a
+deployment must review or strip the behavior in **all** of the above.
 
 ## Reporting a vulnerability
 

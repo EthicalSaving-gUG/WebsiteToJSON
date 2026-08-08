@@ -21,15 +21,21 @@ async function main() {
     let jsRender = config.jsRender || false;
 
     function getPuppeteer() {
+        // Resolve the optional Puppeteer deps from the CURRENT WORKING DIRECTORY,
+        // because the dynamic `npm install --no-save` below installs them there.
+        // When this script runs from a global bin, plain require() would resolve
+        // against the global install location instead and fail even after a
+        // successful install. createRequire(cwd) keeps install and resolve aligned.
+        const cwdRequire = require('module').createRequire(require('path').join(process.cwd(), 'package.json'));
         let p;
         try {
-            require.resolve('puppeteer-extra');
+            cwdRequire.resolve('puppeteer-extra');
         } catch (e) {
             console.error('[DEPENDENCY] Puppeteer not found. Downloading dynamically... This may take a minute.');
             require('child_process').execSync('npm install --no-save puppeteer puppeteer-extra puppeteer-extra-plugin-stealth', { stdio: 'inherit', cwd: process.cwd() });
         }
-        p = require('puppeteer-extra');
-        const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+        p = cwdRequire('puppeteer-extra');
+        const StealthPlugin = cwdRequire('puppeteer-extra-plugin-stealth');
         p.use(StealthPlugin());
         return p;
     }
