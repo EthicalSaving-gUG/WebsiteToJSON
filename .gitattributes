@@ -1,0 +1,17 @@
+# Executable entry-point scripts are installed as `bin` symlinks by npm on
+# Unix. A CRLF shebang (`#!/usr/bin/env node\r`) makes the kernel look for an
+# interpreter literally named `node\r`, so these must always ship with LF.
+browser-cli.js text eol=lf
+tui-browser.js text eol=lf
+mcp-server.js  text eol=lf
+
+# Keep JS/TS/JSON/Markdown normalized to LF in the repo.
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+# Windows-only helper stays CRLF.
+*.bat  text eol=crlf

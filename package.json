@@ -1,13 +1,34 @@
 {
-  "name": "temp",
+  "name": "websitetojson",
   "version": "0.1.0",
   "private": true,
+  "description": "DOS Browser — a retro-styled suite that extracts the semantic content of websites as clean JSON/Markdown, with CLI, TUI, VS Code, and MCP server interfaces.",
+  "keywords": [
+    "mcp",
+    "web-scraping",
+    "readability",
+    "dom-extraction",
+    "cli",
+    "tui",
+    "markdown",
+    "ai-agents"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EthicalSaving-gUG/WebsiteToJSON.git"
+  },
+  "bin": {
+    "dos-browser": "tui-browser.js",
+    "dos-browser-cli": "browser-cli.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "clean": "taskkill /F /IM node.exe /T"
+    "test": "node --test",
+    "clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
