@@ -37,6 +37,7 @@
     "browser-cli.js",
     "tui-browser.js",
     "mcp-server.js",
+    "lib/",
     "config.json",
     "test/",
     "README.md",
@@ -56,17 +57,10 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@mozilla/readability": "^0.5.0",
-    "autoprefixer": "^10.4.27",
     "blessed": "^0.1.81",
     "dompurify": "^3.1.5",
-    "jimp": "^0.22.12",
     "jsdom": "^24.1.0",
-    "next": "16.1.6",
-    "open": "^11.0.0",
-    "postcss": "^8.5.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "tailwindcss": "^4.2.1"
+    "open": "^11.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",
@@ -75,8 +69,14 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.27",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "typescript": "^5"
+    "jimp": "^0.22.12",
+    "next": "16.1.6",
+    "postcss": "^8.5.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "tailwindcss": "^4.2.1"
   }
 }
