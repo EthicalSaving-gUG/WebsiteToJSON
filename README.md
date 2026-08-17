@@ -159,8 +159,19 @@ npx dos-browser https://example.com
 npm install -g dos-browser puppeteer-extra puppeteer-extra-plugin-stealth puppeteer
 ```
 
-Then set `"captchaMode": "stealth"` in `config.json`. Without these packages the
-browser degrades gracefully (Googlebot spoof → Wayback Machine fallback).
+Then enable it per run with the `--captcha=stealth` flag — the portable option,
+since an installed package reads its own bundled `config.json` from inside
+`node_modules`, not a project-level file:
+
+```bash
+npx dos-browser https://example.com --captcha=stealth
+dos-browse https://example.com --captcha=stealth
+```
+
+(The MCP server has no per-call flag; it reads `captchaMode` from the
+`config.json` shipped inside the installed package.) Without the stealth
+packages the browser degrades gracefully (Googlebot spoof → Wayback Machine
+fallback).
 
 ---
 
