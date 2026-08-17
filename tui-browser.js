@@ -339,7 +339,7 @@ async function fetchAndRender(url) {
             if (captchaMode === 'browser') {
                 contentBox.setContent(`{center}{yellow-fg}[CAPTCHA] OPENING SYSTEM BROWSER...{/yellow-fg}{/center}`);
                 screen.render();
-                const open = require('open');
+                const open = (await import('open')).default;
                 await open(targetUrl);
 
                 contentBox.setContent(`{center}{yellow-fg}[CAPTCHA] PLEASE SOLVE IN BROWSER.{/yellow-fg}\n\n{white-fg}Waiting 15 seconds to automatically retry...{/white-fg}{/center}`);
@@ -568,7 +568,7 @@ async function fetchAndRender(url) {
             const cleaned = text ? text.replace(/\s+/g, ' ').trim() : '';
             if (!cleaned) return '';
 
-            const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
+            const promptRegex = require('./lib/injection-filter').PROMPT_INJECTION_REGEX;
             if (promptRegex.test(cleaned)) {
                 diagnosticReport.promptInjectionsStripped++;
                 try {

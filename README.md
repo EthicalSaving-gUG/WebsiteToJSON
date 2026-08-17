@@ -1,6 +1,39 @@
 # DOS Browser 🌐👾
 
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20.9-brightgreen.svg)](https://nodejs.org)
+[![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](https://modelcontextprotocol.io)
+
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+---
+
+## 📦 Install
+
+Run instantly with `npx` (no install required):
+
+```bash
+# Interactive terminal browser
+npx dos-browser https://news.ycombinator.com/
+
+# Headless JSON extractor
+npx -p dos-browser dos-browse https://en.wikipedia.org/wiki/Terminal
+```
+
+Or install globally to get all three commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+```
+
+| Command            | Interface                        |
+| ------------------ | -------------------------------- |
+| `dos-browser`      | Interactive Terminal UI (TUI)    |
+| `dos-browse`       | Headless JSON extractor (CLI)    |
+| `dos-browser-mcp`  | MCP server for AI agents (stdio) |
+
+Requires **Node.js 20.9+**.
 
 ---
 
@@ -51,14 +84,28 @@ A native webview side-panel inside VS Code.
 DOS Browser exposes a standard **MCP Server** via `stdio` that grants any AI agent full semantic access to the web, powered by our custom Ad Blocker, Cookie Bypasser, and Prompt Injection firewalls.
 
 ### Setup for MCP Clients (Claude Desktop, Cursor, etc)
-Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
+Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`.
+
+After a global install (`npm install -g dos-browser`) just point at the binary:
 
 ```json
 {
   "mcpServers": {
     "dos-browser": {
-      "command": "node",
-      "args": ["/absolute/path/to/WebsiteToJSON/mcp-server.js"]
+      "command": "dos-browser-mcp"
+    }
+  }
+}
+```
+
+Or run it on demand with `npx` (no install needed):
+
+```json
+{
+  "mcpServers": {
+    "dos-browser": {
+      "command": "npx",
+      "args": ["-y", "-p", "dos-browser", "dos-browser-mcp"]
     }
   }
 }
@@ -89,5 +136,43 @@ Downloads an image directly from a URL and returns it to the AI as a native Base
 
 **Arguments**:
 - `url` (String, required): The target image URL.
+
+---
+
+## 🕶️ Optional: Stealth CAPTCHA Bypass
+
+The `stealth` CAPTCHA mode launches a headless Chrome instance to get past
+Cloudflare/bot walls. It is fully optional and loaded lazily, so the core tools
+stay lightweight. Enable it only if you need it.
+
+Because the entry points resolve these modules relative to their own install
+location, the extra packages must be installed **in the same scope as
+`dos-browser`** so Node can find them. Install `puppeteer` alongside them
+(`puppeteer-extra` wraps it and it provides the bundled Chromium):
+
+```bash
+# Local project install (recommended)
+npm install dos-browser puppeteer-extra puppeteer-extra-plugin-stealth puppeteer
+npx dos-browser https://example.com
+
+# Or, for a global install, add them globally too
+npm install -g dos-browser puppeteer-extra puppeteer-extra-plugin-stealth puppeteer
+```
+
+Then enable it per run with the `--captcha=stealth` flag — the portable option,
+since an installed package reads its own bundled `config.json` from inside
+`node_modules`, not a project-level file:
+
+```bash
+npx dos-browser https://example.com --captcha=stealth
+dos-browse https://example.com --captcha=stealth
+```
+
+(The MCP server has no per-call flag; it reads `captchaMode` from the
+`config.json` shipped inside the installed package.) Without the stealth
+packages the browser degrades gracefully (Googlebot spoof → Wayback Machine
+fallback).
+
+---
 
 Have fun browsing the retro web! 🚀

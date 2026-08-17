@@ -256,7 +256,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (needsCaptcha(html, response?.status || 200)) {
                 diagnosticReport.captchaSolverUsed = captchaMode || 'none';
                 if (captchaMode === 'browser') {
-                    const open = require('open');
+                    const open = (await import('open')).default;
                     await open(targetUrl);
                     await new Promise(r => setTimeout(r, 15000));
                     response = await fetch(targetUrl, {
@@ -442,7 +442,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             function cleanText(text) {
                 const cleaned = text ? text.replace(/\s+/g, ' ').trim() : '';
                 if (!cleaned) return '';
-                const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
+                const promptRegex = require('./lib/injection-filter').PROMPT_INJECTION_REGEX;
                 if (promptRegex.test(cleaned)) {
                     diagnosticReport.promptInjectionsStripped++;
                     return '';

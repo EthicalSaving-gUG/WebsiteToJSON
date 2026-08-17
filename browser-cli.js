@@ -172,7 +172,7 @@ async function main() {
                 diagnosticReport.captchaSolverUsed = captchaMode || 'none';
                 if (captchaMode === 'browser') {
                     console.error(`[CAPTCHA] Bot protection detected. Opening ${targetUrl} in system browser...`);
-                    const open = require('open');
+                    const open = (await import('open')).default;
                     await open(targetUrl);
                     console.error('[CAPTCHA] Please solve the CAPTCHA in your web browser. Press ENTER when done...');
                     await new Promise(resolve => {
@@ -397,7 +397,7 @@ async function main() {
             const cleaned = text ? text.replace(/\s+/g, ' ').trim() : '';
             if (!cleaned) return '';
 
-            const promptRegex = /(ignore (all |previous )?instructions|disregard (all |previous )?instructions|forget (all |previous )?(instructions|prompts)|system prompt|secret instructions|print your instructions|summarize all of your secret instructions|you are a(n)? |act as a(n)? |developer mode|bypass restrictions|do anything now|DAN)/i;
+            const promptRegex = require('./lib/injection-filter').PROMPT_INJECTION_REGEX;
             if (promptRegex.test(cleaned)) {
                 diagnosticReport.promptInjectionsStripped++;
                 try {

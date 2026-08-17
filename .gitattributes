@@ -1,0 +1,6 @@
+# Ensure the published executable entry points always use LF line endings.
+# A CRLF shebang (`#!/usr/bin/env node\r`) breaks the npm bin links on
+# Unix-like systems ("/usr/bin/env: 'node\r': No such file or directory").
+*.js text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf

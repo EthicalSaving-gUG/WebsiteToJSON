@@ -1,28 +1,66 @@
 {
-  "name": "temp",
+  "name": "dos-browser",
   "version": "0.1.0",
-  "private": true,
+  "description": "Retro-styled, heuristic web-to-JSON browsing suite for Humans and AI Agents. Semantic DOM extraction, prompt-injection firewall, ad blocking and cookie-wall bypass, exposed through a TUI, a headless CLI and an MCP server.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "web-scraping",
+    "html-to-json",
+    "web-to-json",
+    "readability",
+    "ai-agents",
+    "llm",
+    "prompt-injection",
+    "cli",
+    "tui",
+    "browser",
+    "jsdom"
+  ],
+  "homepage": "https://github.com/EthicalSaving-gUG/WebsiteToJSON#readme",
+  "bugs": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EthicalSaving-gUG/WebsiteToJSON.git"
+  },
+  "license": "MIT",
+  "author": "EthicalSaving gUG",
+  "type": "commonjs",
+  "bin": {
+    "dos-browser": "tui-browser.js",
+    "dos-browse": "browser-cli.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
+  "files": [
+    "browser-cli.js",
+    "tui-browser.js",
+    "mcp-server.js",
+    "lib/",
+    "config.json",
+    "test/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --check browser-cli.js && node --check tui-browser.js && node --check mcp-server.js && node test/smoke.js",
     "clean": "taskkill /F /IM node.exe /T"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@mozilla/readability": "^0.5.0",
-    "autoprefixer": "^10.4.27",
     "blessed": "^0.1.81",
     "dompurify": "^3.1.5",
-    "jimp": "^0.22.12",
     "jsdom": "^24.1.0",
-    "next": "16.1.6",
-    "open": "^11.0.0",
-    "postcss": "^8.5.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "tailwindcss": "^4.2.1"
+    "open": "^11.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",
@@ -31,8 +69,15 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.27",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "jimp": "^0.22.12",
+    "next": "16.1.6",
+    "postcss": "^8.5.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "tailwindcss": "^4.2.1",
     "typescript": "^5"
   }
 }
