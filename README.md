@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20.9-brightgreen.svg)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](https://modelcontextprotocol.io)
 
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
@@ -33,7 +33,7 @@ npm install -g dos-browser
 | `dos-browse`       | Headless JSON extractor (CLI)    |
 | `dos-browser-mcp`  | MCP server for AI agents (stdio) |
 
-Requires **Node.js 18+**.
+Requires **Node.js 20.9+**.
 
 ---
 
@@ -143,11 +143,20 @@ Downloads an image directly from a URL and returns it to the AI as a native Base
 
 The `stealth` CAPTCHA mode launches a headless Chrome instance to get past
 Cloudflare/bot walls. It is fully optional and loaded lazily, so the core tools
-stay lightweight. Enable it only if you need it by installing the extra
-dependencies yourself:
+stay lightweight. Enable it only if you need it.
+
+Because the entry points resolve these modules relative to their own install
+location, the extra packages must be installed **in the same scope as
+`dos-browser`** so Node can find them. Install `puppeteer` alongside them
+(`puppeteer-extra` wraps it and it provides the bundled Chromium):
 
 ```bash
-npm install puppeteer-extra puppeteer-extra-plugin-stealth
+# Local project install (recommended)
+npm install dos-browser puppeteer-extra puppeteer-extra-plugin-stealth puppeteer
+npx dos-browser https://example.com
+
+# Or, for a global install, add them globally too
+npm install -g dos-browser puppeteer-extra puppeteer-extra-plugin-stealth puppeteer
 ```
 
 Then set `"captchaMode": "stealth"` in `config.json`. Without these packages the

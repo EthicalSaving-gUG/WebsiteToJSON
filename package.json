@@ -38,13 +38,12 @@
     "tui-browser.js",
     "mcp-server.js",
     "config.json",
-    "src/credentials/",
-    "examples/",
+    "test/",
     "README.md",
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20.9.0"
   },
   "scripts": {
     "dev": "next dev",
