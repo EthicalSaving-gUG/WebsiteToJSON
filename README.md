@@ -1,6 +1,37 @@
 # DOS Browser 🌐👾
 
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![npm downloads](https://img.shields.io/npm/dm/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![node](https://img.shields.io/node/v/dos-browser.svg)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-ready-blueviolet.svg)](https://modelcontextprotocol.io)
+
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+> **Website → clean JSON.** Point it at any URL and get pure readable content — no `<div>` soup, no navbars, no ad networks, no prompt-injection payloads. Use it from your terminal, your editor, a script, or your favorite LLM.
+
+---
+
+## 🚀 Quick Start
+
+No clone required — run it straight from npm with `npx`:
+
+```bash
+# Extract any page to semantic JSON (headless CLI)
+npx dos-browser https://en.wikipedia.org/wiki/Terminal
+
+# Launch the interactive terminal UI browser
+npx dos-tui https://news.ycombinator.com/
+```
+
+Or install globally to get the `dos-browser`, `dos-tui`, and `dos-browser-mcp` commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+
+dos-browser https://example.com
+dos-tui https://news.ycombinator.com/
+```
 
 ---
 
@@ -22,7 +53,10 @@ DOS Browser provides three robust interfaces:
 A fully interactive, keyboard-driven `blessed`-based graphical interface that lives right in your terminal window.
 
 ```bash
-# Launch simply by pointing it to a URL
+# From npm (recommended)
+npx dos-tui https://news.ycombinator.com/
+
+# Or from a local clone
 node tui-browser.js https://news.ycombinator.com/
 ```
 **Controls**:
@@ -35,6 +69,10 @@ node tui-browser.js https://news.ycombinator.com/
 A headless JSON extractor that rapidly navigates a URL and dumps the semantically cleaned `DOM` JSON object straight to `/dev/stdout`. Useful for scripting and piping to other tools.
 
 ```bash
+# From npm (recommended)
+npx dos-browser https://en.wikipedia.org/wiki/Terminal
+
+# Or from a local clone
 node browser-cli.js https://en.wikipedia.org/wiki/Terminal
 ```
 
@@ -51,7 +89,22 @@ A native webview side-panel inside VS Code.
 DOS Browser exposes a standard **MCP Server** via `stdio` that grants any AI agent full semantic access to the web, powered by our custom Ad Blocker, Cookie Bypasser, and Prompt Injection firewalls.
 
 ### Setup for MCP Clients (Claude Desktop, Cursor, etc)
-Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
+Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`.
+
+**From npm (recommended)** — no clone or absolute paths needed:
+
+```json
+{
+  "mcpServers": {
+    "dos-browser": {
+      "command": "npx",
+      "args": ["-y", "--package=dos-browser", "dos-browser-mcp"]
+    }
+  }
+}
+```
+
+**From a local clone** — point directly at the server file:
 
 ```json
 {
