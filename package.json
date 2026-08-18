@@ -1,12 +1,60 @@
 {
-  "name": "temp",
+  "name": "dos-browser",
   "version": "0.1.0",
-  "private": true,
+  "description": "Retro-styled web browsing suite that turns any website into clean semantic JSON/Markdown — with a TUI, a headless CLI, a VS Code extension, and an MCP server for AI agents. Built-in prompt-injection firewall, ad blocker, and cookie-wall bypass.",
+  "keywords": [
+    "web-scraping",
+    "website-to-json",
+    "html-to-json",
+    "dom-parser",
+    "semantic-extraction",
+    "readability",
+    "mcp",
+    "model-context-protocol",
+    "ai-agent",
+    "llm",
+    "cli",
+    "tui",
+    "prompt-injection",
+    "ad-blocker",
+    "markdown"
+  ],
+  "homepage": "https://github.com/EthicalSaving-gUG/WebsiteToJSON#readme",
+  "bugs": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EthicalSaving-gUG/WebsiteToJSON.git"
+  },
+  "license": "MIT",
+  "author": "Ethicalsaving gUG",
+  "bin": {
+    "dos-browser": "browser-cli.js",
+    "dos-tui": "tui-browser.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
+  "files": [
+    "browser-cli.js",
+    "tui-browser.js",
+    "mcp-server.js",
+    "config.json",
+    "src/credentials",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --check browser-cli.js && node --check tui-browser.js && node --check mcp-server.js",
+    "cli": "node browser-cli.js",
+    "tui": "node tui-browser.js",
+    "mcp": "node mcp-server.js",
     "clean": "taskkill /F /IM node.exe /T"
   },
   "dependencies": {
@@ -23,6 +71,9 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "tailwindcss": "^4.2.1"
+  },
+  "optionalDependencies": {
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",
