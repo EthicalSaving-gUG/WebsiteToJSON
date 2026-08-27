@@ -1,6 +1,34 @@
 # DOS Browser 🌐👾
 
-The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![npm downloads](https://img.shields.io/npm/dm/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![license](https://img.shields.io/npm/l/dos-browser.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/dos-browser.svg)](https://nodejs.org)
+
+The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites (a clean **Website-to-JSON** engine). It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+---
+
+## 🚀 Quick Start
+
+No install required — run any interface straight from npm with `npx`:
+
+```bash
+# Headless JSON extractor (pipe-friendly)
+npx dos-browser https://en.wikipedia.org/wiki/Terminal
+
+# Interactive terminal UI
+npx dos-browser-tui https://news.ycombinator.com/
+
+# MCP server for AI agents (stdio)
+npx dos-browser-mcp
+```
+
+Or install it globally to get the `dos-browser`, `dos-browser-tui`, and `dos-browser-mcp` commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+```
 
 ---
 
@@ -57,12 +85,27 @@ Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
 {
   "mcpServers": {
     "dos-browser": {
+      "command": "npx",
+      "args": ["-y", "dos-browser-mcp"]
+    }
+  }
+}
+```
+
+<details>
+<summary>Prefer a local checkout? Point it at the file directly.</summary>
+
+```json
+{
+  "mcpServers": {
+    "dos-browser": {
       "command": "node",
       "args": ["/absolute/path/to/WebsiteToJSON/mcp-server.js"]
     }
   }
 }
 ```
+</details>
 
 ### Available AI Tools
 
