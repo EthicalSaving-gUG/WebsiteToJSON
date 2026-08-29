@@ -2,7 +2,16 @@
 
 ## Summary
 
-I've successfully built a **Browser Password Import** feature for your WebsiteToJSON project. Here's what was delivered:
+This document describes the **Browser Password Import** feature for the WebsiteToJSON project.
+
+> **Status note:** This feature is a working *scaffold*, not a finished product.
+> It reads the credential *metadata* (URLs and usernames) that browsers store
+> locally, but it does **not** yet decrypt the passwords themselves. On every
+> platform the password field currently resolves to a placeholder such as
+> `[Encrypted - requires system key access]` (Chrome/Chromium/Brave/Edge) or
+> `[Encrypted - requires NSS3 decryption]` (Firefox). Real decryption requires
+> the platform-specific work listed under "Next Steps" (DPAPI, Keychain, NSS3,
+> keyring). Treat the sample output below as illustrative, not literal.
 
 ## ✅ Files Created
 
@@ -165,6 +174,9 @@ docs/
 
 ---
 
-**Status:** ✅ **Complete and ready to use!**
+**Status:** 🚧 **Scaffold — metadata import works; password decryption not yet implemented.**
 
-All files have been committed to your repository. The feature is production-ready for importing browser passwords into KeePass.
+The files have been committed to the repository. The feature imports credential
+metadata (URLs, usernames) and can export the KeePass CSV/XML structure, but
+actual password decryption per platform (see "Next Steps") is still required
+before this can round-trip real passwords into KeePass.
