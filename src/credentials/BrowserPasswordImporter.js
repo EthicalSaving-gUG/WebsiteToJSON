@@ -334,7 +334,7 @@ export class BrowserPasswordImporter extends CredentialProvider {
       for (const [url, cred] of this.credentials) {
         try {
           const domain = new URL(url).hostname;
-          csv += `"${domain}","${this._escapeCsv(cred.username)}","${this._escapeCsv(cred.password)}","${url}"\n`;
+          csv += `"${this._escapeCsv(domain)}","${this._escapeCsv(cred.username)}","${this._escapeCsv(cred.password)}","${this._escapeCsv(url)}"\n`;
         } catch (e) {
           // Skip malformed URLs
         }
@@ -368,13 +368,19 @@ export class BrowserPasswordImporter extends CredentialProvider {
   }
 
   /**
-   * Helper: Escape CSV values
+   * Helper: Escape a CSV field value (RFC 4180).
+   *
+   * Doubles embedded double-quotes so the value stays inside its quoted
+   * field regardless of quotes, commas, or newlines it contains. This output
+   * is a KeePass *import* file, so values are deliberately preserved exactly —
+   * no formula/spreadsheet-safety mutation is applied, since prefixing a
+   * leading =, +, -, or @ would corrupt real usernames/passwords on import.
    * @param {string} value
    * @returns {string}
    */
   _escapeCsv(value) {
     if (!value) return '';
-    return value.replace(/"/g, '""');
+    return String(value).replace(/"/g, '""');
   }
 
   /**
