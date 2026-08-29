@@ -368,21 +368,19 @@ export class BrowserPasswordImporter extends CredentialProvider {
   }
 
   /**
-   * Helper: Escape CSV values.
+   * Helper: Escape a CSV field value (RFC 4180).
    *
-   * Doubles embedded quotes (RFC 4180) and neutralises CSV/formula injection:
-   * a value beginning with =, +, -, @ or a control character is prefixed with
-   * a single quote so spreadsheet apps treat it as text rather than a formula.
+   * Doubles embedded double-quotes so the value stays inside its quoted
+   * field regardless of quotes, commas, or newlines it contains. This output
+   * is a KeePass *import* file, so values are deliberately preserved exactly —
+   * no formula/spreadsheet-safety mutation is applied, since prefixing a
+   * leading =, +, -, or @ would corrupt real usernames/passwords on import.
    * @param {string} value
    * @returns {string}
    */
   _escapeCsv(value) {
     if (!value) return '';
-    let out = String(value);
-    if (/^[=+\-@\t\r]/.test(out)) {
-      out = `'${out}`;
-    }
-    return out.replace(/"/g, '""');
+    return String(value).replace(/"/g, '""');
   }
 
   /**

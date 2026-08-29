@@ -5,12 +5,26 @@
 This document describes the **Browser Password Import** feature for the WebsiteToJSON project.
 
 > **Status note:** This feature is a working *scaffold*, not a finished product.
-> It reads the credential *metadata* (URLs and usernames) that browsers store
-> locally, but it does **not** yet decrypt the passwords themselves. On every
-> platform the password field currently resolves to a placeholder such as
-> `[Encrypted - requires system key access]` (Chrome/Chromium/Brave/Edge) or
-> `[Encrypted - requires NSS3 decryption]` (Firefox). Real decryption requires
-> the platform-specific work listed under "Next Steps" (DPAPI, Keychain, NSS3,
+> It reads the credential records that browsers store locally, but it does
+> **not** correctly recover the plaintext passwords yet:
+>
+> - **Chrome/Chromium/Brave/Edge:** the `origin_url` and `username_value` are
+>   read correctly, but the password is **not** decrypted. On macOS it resolves
+>   to a placeholder like `[Encrypted - requires Keychain access]`; on Linux
+>   (when the encrypted key is present) to `[Encrypted - requires system key
+>   access]`; but on Windows, and on Linux when `Local State`/the key is
+>   missing, the current fallback returns `Buffer.from(...).toString('utf-8')`
+>   — i.e. **lossy-decoded raw encrypted bytes, not readable text and not the
+>   placeholder**. So exported CSV/XML passwords in those paths are garbage,
+>   not real credentials.
+> - **Firefox:** the stored `username` field captured here is actually
+>   `login.usernameField` — the HTML **form field name** (e.g. `"username"`),
+>   *not* the account's real username, which lives encrypted in
+>   `encryptedUsername`. The password is likewise left as
+>   `[Encrypted - requires NSS3 decryption]`.
+>
+> Real decryption (and the correct Firefox username) requires the
+> platform-specific work listed under "Next Steps" (DPAPI, Keychain, NSS3,
 > keyring). Treat the sample output below as illustrative, not literal.
 
 ## ✅ Files Created
