@@ -1,12 +1,55 @@
 {
-  "name": "temp",
+  "name": "dos-browser",
   "version": "0.1.0",
-  "private": true,
+  "description": "A retro-styled suite of web browsing tools built in Node.js: heuristic semantic DOM extraction with TUI, CLI, and an MCP server so AI agents can read the web as clean Markdown.",
+  "keywords": [
+    "browser",
+    "cli",
+    "tui",
+    "mcp",
+    "model-context-protocol",
+    "web-scraping",
+    "dom",
+    "readability",
+    "markdown",
+    "ai-agents",
+    "website-to-json"
+  ],
+  "homepage": "https://github.com/EthicalSaving-gUG/WebsiteToJSON#readme",
+  "bugs": {
+    "url": "https://github.com/EthicalSaving-gUG/WebsiteToJSON/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EthicalSaving-gUG/WebsiteToJSON.git"
+  },
+  "license": "MIT",
+  "author": "Ethicalsaving gUG",
+  "bin": {
+    "dos-browser": "browser-cli.js",
+    "dos-browser-tui": "tui-browser.js",
+    "dos-browser-mcp": "mcp-server.js"
+  },
+  "files": [
+    "browser-cli.js",
+    "tui-browser.js",
+    "mcp-server.js",
+    "config.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --check mcp-server.js && node --check browser-cli.js && node --check tui-browser.js",
     "clean": "taskkill /F /IM node.exe /T"
   },
   "dependencies": {
@@ -23,6 +66,9 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "tailwindcss": "^4.2.1"
+  },
+  "optionalDependencies": {
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",

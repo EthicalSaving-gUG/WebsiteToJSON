@@ -4,6 +4,31 @@ The DOS Browser is a powerful, retro-styled suite of web browsing tools built en
 
 ---
 
+## 📦 Install
+
+Once published, install globally from npm to get the `dos-browser`, `dos-browser-tui`, and `dos-browser-mcp` commands on your `PATH`:
+
+```bash
+npm install -g dos-browser
+```
+
+Or run the latest version without installing:
+
+```bash
+npx dos-browser https://en.wikipedia.org/wiki/Terminal
+```
+
+To hack on the tools directly from a clone:
+
+```bash
+git clone https://github.com/EthicalSaving-gUG/WebsiteToJSON.git
+cd WebsiteToJSON
+npm install
+node browser-cli.js https://news.ycombinator.com/
+```
+
+---
+
 ## 🛠️ Core Features
 
 - **Semantic DOM Extraction**: Automatically strips `<div>` soup, navbars, and footers, extracting only pure readable content, headers, and interactive elements.
@@ -91,3 +116,9 @@ Downloads an image directly from a URL and returns it to the AI as a native Base
 - `url` (String, required): The target image URL.
 
 Have fun browsing the retro web! 🚀
+
+---
+
+## 📄 License
+
+Released under the [MIT License](./LICENSE) © Ethicalsaving gUG.
