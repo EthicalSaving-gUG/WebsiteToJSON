@@ -1,0 +1,5 @@
+# Ensure the published CLI entry points always use LF line endings so their
+# shebangs work on Linux/macOS (a CRLF shebang makes env look for "node\r").
+/browser-cli.js text eol=lf
+/tui-browser.js text eol=lf
+/mcp-server.js text eol=lf
