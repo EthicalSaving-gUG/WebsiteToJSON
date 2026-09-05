@@ -1,6 +1,34 @@
 # DOS Browser 🌐👾
 
+[![npm version](https://img.shields.io/npm/v/dos-browser.svg)](https://www.npmjs.com/package/dos-browser)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![MCP](https://img.shields.io/badge/MCP-server-blueviolet.svg)](https://modelcontextprotocol.io)
+
 The DOS Browser is a powerful, retro-styled suite of web browsing tools built entirely in Node.js. It features robust heuristic DOM parsing that strips away noise and extracts the true semantic meaning of websites. It comes with multi-platform interfaces designed for both **Humans** and **AI Agents**.
+
+---
+
+## ⚡ Quick Start
+
+Run any of the tools straight from npm — no clone required:
+
+```bash
+# Headless JSON extractor (pipeable)
+npx dos-browser https://en.wikipedia.org/wiki/Terminal
+
+# Interactive terminal UI browser
+npx dos-browser-tui https://news.ycombinator.com/
+
+# MCP server for AI agents (stdio)
+npx dos-browser-mcp
+```
+
+Or install it globally:
+
+```bash
+npm install -g dos-browser
+```
 
 ---
 
@@ -51,7 +79,21 @@ A native webview side-panel inside VS Code.
 DOS Browser exposes a standard **MCP Server** via `stdio` that grants any AI agent full semantic access to the web, powered by our custom Ad Blocker, Cookie Bypasser, and Prompt Injection firewalls.
 
 ### Setup for MCP Clients (Claude Desktop, Cursor, etc)
-Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
+Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`. Using `npx` keeps it up to date and needs no local checkout:
+
+```json
+{
+  "mcpServers": {
+    "dos-browser": {
+      "command": "npx",
+      "args": ["-y", "dos-browser-mcp"]
+    }
+  }
+}
+```
+
+<details>
+<summary>Prefer a local checkout?</summary>
 
 ```json
 {
@@ -63,6 +105,9 @@ Add `dos-browser` to your `mcp.json` or `claude_desktop_config.json`:
   }
 }
 ```
+</details>
+
+> **MCP Registry**: this server ships a [`server.json`](./server.json) manifest so it can be published to the official [Model Context Protocol registry](https://registry.modelcontextprotocol.io).
 
 ### Available AI Tools
 
