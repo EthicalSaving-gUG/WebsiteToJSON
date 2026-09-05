@@ -1,0 +1,9 @@
+# Keep the executable entrypoints LF so their `#!/usr/bin/env node` shebang
+# works when the package is installed and run on Linux/macOS via npx.
+browser-cli.js text eol=lf
+tui-browser.js text eol=lf
+mcp-server.js  text eol=lf
+*.sh           text eol=lf
+
+# Windows launcher stays CRLF.
+*.bat          text eol=crlf
