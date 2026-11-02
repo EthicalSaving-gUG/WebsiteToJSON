@@ -104,12 +104,61 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     required: ["url"]
                 }
+            },
+            {
+                name: "get_ssh_credentials",
+                description: "Retrieves classic SSH credentials (username and password) using the local password manager integration.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label or hostname of the SSH credential to retrieve."
+                        }
+                    },
+                    required: ["label"]
+                }
             }
         ]
     };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "get_ssh_credentials") {
+        const { getProvider } = await import('./src/credentials/index.js');
+        const provider = getProvider('ssh');
+        if (!provider) {
+            return {
+                content: [{ type: "text", text: "Error: SSH Provider is not registered or unavailable." }],
+                isError: true,
+            };
+        }
+        try {
+            const meta = await provider.getCredentialsMeta(request.params.arguments.label);
+            if (meta) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify({
+                            username: meta.username,
+                            password: meta.password,
+                            id: meta.id
+                        }, null, 2)
+                    }]
+                };
+            } else {
+                return {
+                    content: [{ type: "text", text: `No credentials found for label: ${request.params.arguments.label}` }]
+                };
+            }
+        } catch (e) {
+            return {
+                content: [{ type: "text", text: `Error retrieving credentials: ${e.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
@@ -533,6 +582,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+    await import('./src/credentials/index.js');
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("DOS Browser MCP Server running on stdio");
