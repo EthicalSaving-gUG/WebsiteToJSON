@@ -104,12 +104,74 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     required: ["url"]
                 }
+            },
+            {
+                name: "get_ssh_credentials",
+                description: "Retrieve classic SSH credentials (username and password) using a label from the credentials manager.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label of the SSH credential to retrieve."
+                        }
+                    },
+                    required: ["label"]
+                }
             }
         ]
     };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "get_ssh_credentials") {
+        const { label } = request.params.arguments;
+        try {
+            const { getProvider } = await import('./src/credentials/index.js');
+            const sshProvider = getProvider('ssh');
+
+            if (!sshProvider) {
+                return {
+                    content: [{ type: "text", text: "Error: SSH credential provider is not available or registered." }],
+                    isError: true,
+                };
+            }
+
+            const isInitialized = await sshProvider.initialize();
+            if (!isInitialized) {
+                return {
+                    content: [{ type: "text", text: "Error: Failed to initialize SSH credential provider." }],
+                    isError: true,
+                };
+            }
+
+            const meta = await sshProvider.getCredentialMeta(label);
+            if (!meta || !meta.username || !meta.password) {
+                return {
+                    content: [{ type: "text", text: `Error: Could not retrieve full SSH credentials (username and password) for label: ${label}` }],
+                    isError: true,
+                };
+            }
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: JSON.stringify({
+                            username: meta.username,
+                            password: meta.password
+                        }, null, 2)
+                    }
+                ]
+            };
+        } catch (error) {
+            return {
+                content: [{ type: "text", text: `Error retrieving SSH credentials: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
