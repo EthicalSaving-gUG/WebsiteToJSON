@@ -64,6 +64,7 @@ const providerRegistry = {
   'manual': null,
   'keepassxc': null,
   'vaultwarden': null,
+  'ssh': null,
   'browser-import-chrome': null,
   'browser-import-firefox': null,
   'browser-import-edge': null,

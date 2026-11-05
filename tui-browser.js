@@ -833,10 +833,16 @@ screen.on('mouse', function (data) {
 });
 
 const initialUrl = args.find(a => !a.startsWith('--'));
-if (initialUrl) {
-    urlInput.setValue(initialUrl);
-    fetchAndRender(initialUrl);
-} else {
-    urlInput.focus();
-}
-screen.render();
+
+import('./src/credentials/index.js').then(() => {
+    if (initialUrl) {
+        urlInput.setValue(initialUrl);
+        fetchAndRender(initialUrl);
+    } else {
+        urlInput.focus();
+    }
+    screen.render();
+}).catch(err => {
+    console.error("Failed to initialize credential providers:", err);
+    process.exit(1);
+});
