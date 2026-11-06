@@ -104,6 +104,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     required: ["url"]
                 }
+            },
+            {
+                name: "get_credential",
+                description: "Retrieves credentials (username and password) using a configured credential provider.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        provider: {
+                            type: "string",
+                            description: "The name of the credential provider (e.g. 'ssh', 'vaultwarden', 'keepassxc')."
+                        },
+                        label: {
+                            type: "string",
+                            description: "The identifier or label for the credential to retrieve."
+                        }
+                    },
+                    required: ["provider", "label"]
+                }
             }
         ]
     };
@@ -529,10 +547,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             };
         }
     }
+    if (request.params.name === "get_credential") {
+        const providerName = request.params.arguments.provider;
+        const label = request.params.arguments.label;
+        try {
+            const { getProvider } = await import("./src/credentials/index.js");
+            const provider = getProvider(providerName);
+
+            if (!provider) {
+                return {
+                    content: [{ type: "text", text: `Error: Provider '${providerName}' not found or not registered.` }],
+                    isError: true,
+                };
+            }
+
+            await provider.initialize();
+            const meta = await provider.getCredentialMeta(label);
+
+            if (!meta) {
+                return {
+                    content: [{ type: "text", text: `Error: Credential for label '${label}' not found via provider '${providerName}'.` }],
+                    isError: true,
+                };
+            }
+
+            return {
+                content: [{ type: "text", text: JSON.stringify(meta, null, 2) }]
+            };
+        } catch (error) {
+             return {
+                content: [{ type: "text", text: `Credential retrieval error: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     throw new Error(`Tool not found: ${request.params.name}`);
 });
 
 async function main() {
+    await import("./src/credentials/index.js");
+
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("DOS Browser MCP Server running on stdio");
