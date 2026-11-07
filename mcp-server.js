@@ -9,6 +9,9 @@ const DOMPurify = require('dompurify');
 const fs = require('fs');
 const path = require('path');
 
+// Dynamically import credentials index to ensure side-effects run (e.g., registering providers)
+const credentialsIndexPromise = import('./src/credentials/index.js');
+
 const configPath = path.join(__dirname, 'config.json');
 let globalConfig = {};
 if (fs.existsSync(configPath)) {
@@ -104,6 +107,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     required: ["url"]
                 }
+            },
+            {
+                name: "get_ssh_credentials",
+                description: "Retrieve classic SSH credentials (username and password) using the configured SSH credential provider.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label or identifier for the SSH credential to retrieve."
+                        }
+                    },
+                    required: ["label"]
+                }
             }
         ]
     };
@@ -149,6 +166,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         } catch (error) {
             return {
                 content: [{ type: "text", text: `Image fetch error: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+
+    if (request.params.name === "get_ssh_credentials") {
+        const label = request.params.arguments.label;
+        try {
+            const { getProvider } = await credentialsIndexPromise;
+            const sshProvider = getProvider('ssh');
+
+            if (!sshProvider) {
+                return {
+                    content: [{ type: "text", text: `Error: SSH Provider is not configured or registered.` }],
+                    isError: true,
+                };
+            }
+
+            await sshProvider.initialize();
+            const meta = await sshProvider.getCredentialMeta(label);
+
+            if (!meta) {
+                return {
+                    content: [{ type: "text", text: `Error: Could not retrieve SSH credentials for label '${label}'.` }],
+                    isError: true,
+                };
+            }
+
+            return {
+                content: [
+                    { type: "text", text: `SSH Credentials for '${label}':\nUsername: ${meta.username || 'Not found'}\nPassword: ${meta.password || 'Not found'}` }
+                ]
+            };
+        } catch (error) {
+            return {
+                content: [{ type: "text", text: `Error fetching SSH credentials: ${error.message}` }],
                 isError: true,
             };
         }
