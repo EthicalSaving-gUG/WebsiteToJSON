@@ -5,6 +5,9 @@ const { Readability } = require('@mozilla/readability');
 const { JSDOM } = require('jsdom');
 const DOMPurify = require('dompurify');
 
+// Dynamically import credentials index to ensure side-effects run (e.g., registering providers)
+import('./src/credentials/index.js').catch(console.error);
+
 async function main() {
     const configPath = require('path').join(__dirname, 'config.json');
     let config = {};
