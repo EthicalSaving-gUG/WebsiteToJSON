@@ -7,6 +7,8 @@ const DOMPurify = require('dompurify');
 const fs = require('fs');
 const path = require('path');
 
+import('./src/credentials/index.js').catch(console.error);
+
 const configPath = path.join(__dirname, 'config.json');
 let config = {};
 if (fs.existsSync(configPath)) {

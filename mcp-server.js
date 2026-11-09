@@ -104,12 +104,49 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     required: ["url"]
                 }
+            },
+            {
+                name: "get_ssh_credentials",
+                description: "Retrieve classic SSH credentials (username and password) using a label.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label or identifier of the SSH credential to retrieve."
+                        }
+                    },
+                    required: ["label"]
+                }
             }
         ]
     };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "get_ssh_credentials") {
+        const { getProvider } = await import('./src/credentials/index.js');
+        const sshProvider = getProvider('ssh');
+        if (!sshProvider) {
+            return {
+                content: [{ type: "text", text: "Error: SSH Provider is not registered." }],
+                isError: true,
+            };
+        }
+        await sshProvider.initialize();
+        const credentials = await sshProvider.getCredentialMeta(request.params.arguments.label);
+        if (credentials) {
+            return {
+                content: [{ type: "text", text: `SSH Credentials:\nUsername: ${credentials.username}\nPassword: ${credentials.password}` }],
+            };
+        } else {
+            return {
+                content: [{ type: "text", text: `Error: No SSH credentials found for label "${request.params.arguments.label}".` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
@@ -533,6 +570,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+    await import('./src/credentials/index.js');
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("DOS Browser MCP Server running on stdio");
