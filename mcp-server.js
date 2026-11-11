@@ -92,6 +92,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 }
             },
             {
+                name: "get_ssh_credential",
+                description: "Retrieves classic SSH credentials (username and password) from the password manager using a label or reference.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The label or reference for the SSH credential to retrieve."
+                        }
+                    },
+                    required: ["label"]
+                }
+            },
+            {
                 name: "fetch_image",
                 description: "Download an image from a URL and return it as a base64 encoded image for AI vision models.",
                 inputSchema: {
@@ -110,6 +124,40 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "get_ssh_credential") {
+        try {
+            const { getProvider } = await import('./src/credentials/index.js');
+            const sshProvider = getProvider('ssh');
+
+            if (!sshProvider) {
+                return {
+                    content: [{ type: "text", text: "Error: SSH Provider is not registered." }],
+                    isError: true,
+                };
+            }
+
+            await sshProvider.initialize();
+            const label = request.params.arguments.label;
+            const creds = await sshProvider.getCredentialMeta(label);
+
+            if (!creds) {
+                return {
+                    content: [{ type: "text", text: `Error: No SSH credentials found for label '${label}'.` }],
+                    isError: true,
+                };
+            }
+
+            return {
+                content: [{ type: "text", text: `SSH Credentials:\nUsername: ${creds.username || 'N/A'}\nPassword: ${creds.password || 'N/A'}` }]
+            };
+        } catch (error) {
+            return {
+                content: [{ type: "text", text: `SSH Credential error: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
