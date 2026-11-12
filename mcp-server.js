@@ -61,6 +61,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
         tools: [
             {
+                name: "get_ssh_credentials",
+                description: "Retrieve classic SSH credentials (username and password) from the local password manager using a label or path.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        label: {
+                            type: "string",
+                            description: "The path or label of the SSH credential entry in the password manager (e.g. 'servers/prod-db')."
+                        }
+                    },
+                    required: ["label"]
+                }
+            },
+            {
                 name: "browse_website",
                 description: "Parse and extract a website DOM for AI ingestion. Includes Cookie Wall bypassing, prompt injection filtering, and ad-blocking.",
                 inputSchema: {
@@ -110,6 +124,45 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "get_ssh_credentials") {
+        const label = request.params.arguments.label;
+        try {
+            const { getProvider } = await import('./src/credentials/index.js');
+            const sshProvider = getProvider('ssh');
+
+            if (!sshProvider) {
+                return {
+                    content: [{ type: "text", text: "Error: SSH Provider is not configured." }],
+                    isError: true,
+                };
+            }
+
+            if (!sshProvider.initialized) {
+                await sshProvider.initialize();
+            }
+
+            const creds = await sshProvider.getCredentialMeta(label);
+            if (!creds || !creds.username || !creds.password) {
+                return {
+                    content: [{ type: "text", text: `Error: Could not retrieve full SSH credentials for label '${label}'. Make sure it exists and has both username and password.` }],
+                    isError: true,
+                };
+            }
+
+            return {
+                content: [{
+                    type: "text",
+                    text: `Username: ${creds.username}\nPassword: ${creds.password}`
+                }]
+            };
+        } catch (error) {
+            return {
+                content: [{ type: "text", text: `Error retrieving SSH credentials: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+
     if (request.params.name === "fetch_image") {
         const targetUrl = request.params.arguments.url;
         try {
@@ -533,6 +586,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+    await import('./src/credentials/index.js');
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("DOS Browser MCP Server running on stdio");
