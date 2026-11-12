@@ -7,6 +7,9 @@ const DOMPurify = require('dompurify');
 const fs = require('fs');
 const path = require('path');
 
+// Ensure providers are registered to avoid dead code
+import('./src/credentials/index.js').catch(() => {});
+
 const configPath = path.join(__dirname, 'config.json');
 let config = {};
 if (fs.existsSync(configPath)) {

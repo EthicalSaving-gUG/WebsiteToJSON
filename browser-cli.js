@@ -6,6 +6,7 @@ const { JSDOM } = require('jsdom');
 const DOMPurify = require('dompurify');
 
 async function main() {
+    await import('./src/credentials/index.js');
     const configPath = require('path').join(__dirname, 'config.json');
     let config = {};
     if (fs.existsSync(configPath)) {
